@@ -93,27 +93,13 @@ public sealed class Game
                 _inMenu = false;
                 _aiTimer = 0.5f;
                 break;
-            case "BEGINNER":
-                _menuConfig = _menuConfig with { Level = GameLevel.Beginner };
-                break;
-            case "INTERMEDIATE":
-                _menuConfig = _menuConfig with { Level = GameLevel.Intermediate };
-                break;
-            case "LOW CHANCE":
-                _menuConfig = _menuConfig with { Chance = ChanceLevel.Low };
-                break;
-            case "MED CHANCE":
-                _menuConfig = _menuConfig with { Chance = ChanceLevel.Medium };
-                break;
-            case "1 HUMAN":
-                _menuConfig = _menuConfig with { HumanPlayerCount = 1, TotalPlayers = 2 };
-                break;
-            case "2 HUMAN":
-                _menuConfig = _menuConfig with { HumanPlayerCount = 2, TotalPlayers = 2 };
+            case "EXIT":
+                Raylib.CloseWindow();
                 break;
             case "MAIN MENU":
                 _inMenu = true;
                 _session = null;
+                _menuSelection = 0;
                 break;
         }
     }
@@ -251,19 +237,14 @@ public sealed class Game
     private List<(Rectangle Rect, string Label)> GetMenuButtons()
     {
         int x = ScreenWidth / 2 - 100;
-        int y = 260;
+        int y = 280;
         int w = 200;
-        int h = 30;
-        int gap = 6;
+        int h = 34;
+        int gap = 12;
         return
         [
             (new Rectangle(x, y, w, h), "NEW GAME"),
-            (new Rectangle(x - 110, y + 50, 120, h), "BEGINNER"),
-            (new Rectangle(x + 15, y + 50, 120, h), "INTERMEDIATE"),
-            (new Rectangle(x - 110, y + 50 + h + gap, 120, h), "LOW CHANCE"),
-            (new Rectangle(x + 15, y + 50 + h + gap, 120, h), "MED CHANCE"),
-            (new Rectangle(x - 110, y + 50 + 2 * (h + gap), 120, h), "1 HUMAN"),
-            (new Rectangle(x + 15, y + 50 + 2 * (h + gap), 120, h), "2 HUMAN"),
+            (new Rectangle(x, y + h + gap, w, h), "EXIT"),
         ];
     }
 

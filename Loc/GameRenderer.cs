@@ -20,7 +20,7 @@ public sealed class GameRenderer
 
         if (inMenu || session == null)
         {
-            DrawMainMenu(menuConfig ?? new GameConfig());
+            DrawMainMenu();
             return;
         }
 
@@ -354,13 +354,17 @@ public sealed class GameRenderer
         }
     }
 
-    private void DrawMainMenu(GameConfig config)
+    private void DrawMainMenu()
     {
         int cx = Raylib.GetScreenWidth() / 2;
-        DrawClassicLabel("LORDS OF CONQUEST", cx - 130, 100, 32);
-        DrawClassicLabel("A TERRITORIAL STRATEGY CLASSIC", cx - 150, 145, 14);
-        DrawClassicLabel($"LEVEL {config.Level.ToString().ToUpperInvariant()}", cx - 80, 180, 14);
-        DrawClassicLabel($"CHANCE {config.Chance.ToString().ToUpperInvariant()}", cx - 90, 200, 14);
+        DrawCenteredLabel("LORDS OF CONQUEST", cx, 120, 32);
+        DrawCenteredLabel("A TERRITORIAL STRATEGY CLASSIC", cx, 165, 14);
+    }
+
+    private static void DrawCenteredLabel(string text, int centerX, int y, int size)
+    {
+        Vector2 measured = UiText.MeasureTextSize(text, size);
+        UiText.DrawText(text, centerX - (int)(measured.X / 2), y, size, ClassicPalette.Text);
     }
 
     public int? TerritoryAt(GameSession session, Vector2 mouse)
