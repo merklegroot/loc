@@ -233,11 +233,16 @@ public sealed class Game
 
         if (_inMenu)
         {
-            DrawMenuButtonBackdrop();
-            _renderer.DrawButtons(GetMenuButtons(), _menuSelection);
             if (_viewingResources)
             {
                 _renderer.DrawResourcesScreen();
+                DrawMenuButtonBackdrop();
+                _renderer.DrawButtons(GetMenuButtons(), _menuSelection);
+            }
+            else
+            {
+                DrawMenuButtonBackdrop();
+                _renderer.DrawButtons(GetMenuButtons(), _menuSelection);
             }
         }
         else if (_session != null)
@@ -289,7 +294,9 @@ public sealed class Game
 
         if (_viewingResources)
         {
-            int backY = ScreenHeight / 2 + 230;
+            const int panelH = 420;
+            int panelY = (ScreenHeight - panelH) / 2;
+            int backY = panelY + panelH + 16;
             return [(new Rectangle(x, backY, w, h), "BACK")];
         }
 
