@@ -8,21 +8,24 @@ public sealed class GameRenderer
     private const int PanelHeight = 190;
     private const int StarSpacing = 18;
     private int _checkerFrame;
+    private TitleScreenAssets? _titleScreen;
 
     public int MapOffsetX { get; private set; }
     public int MapOffsetY { get; private set; }
     public int CellSize { get; private set; } = 12;
 
+    public void SetTitleScreen(TitleScreenAssets titleScreen) => _titleScreen = titleScreen;
+
     public void Draw(GameSession? session, GameConfig? menuConfig, bool inMenu)
     {
-        DrawStarfield();
-        _checkerFrame++;
-
         if (inMenu || session == null)
         {
             DrawMainMenu();
             return;
         }
+
+        DrawStarfield();
+        _checkerFrame++;
 
         ComputeMapLayout(session.Map);
         DrawMap(session);
@@ -356,9 +359,42 @@ public sealed class GameRenderer
 
     private void DrawMainMenu()
     {
-        int cx = Raylib.GetScreenWidth() / 2;
-        DrawCenteredLabel("LORDS OF CONQUEST", cx, 120, 32);
-        DrawCenteredLabel("A TERRITORIAL STRATEGY CLASSIC", cx, 165, 14);
+        int w = Raylib.GetScreenWidth();
+        int h = Raylib.GetScreenHeight();
+
+        if (_titleScreen?.IsLoaded == true)
+        {
+            _titleScreen.DrawFullscreen();
+            DrawTitleBackdrop(w);
+        }
+        else
+        {
+            DrawStarfield();
+        }
+
+        int cx = w / 2;
+        DrawCenteredLabelWithShadow("LORDS OF CONQUEST", cx, 100, 40, new Color(255, 228, 160, 255));
+        DrawCenteredLabelWithShadow("A TERRITORIAL STRATEGY CLASSIC", cx, 152, 16, new Color(230, 230, 230, 255));
+    }
+
+    private static void DrawTitleBackdrop(int screenWidth)
+    {
+        const int bandHeight = 240;
+        for (int y = 0; y < bandHeight; y++)
+        {
+            byte alpha = (byte)(160 * (1.0 - (double)y / bandHeight));
+            Raylib.DrawLine(0, y, screenWidth, y, new Color((byte)0, (byte)0, (byte)0, alpha));
+        }
+    }
+
+    private static void DrawCenteredLabelWithShadow(string text, int centerX, int y, int size, Color color)
+    {
+        Vector2 measured = UiText.MeasureTextSize(text, size);
+        int x = centerX - (int)(measured.X / 2);
+        UiText.DrawText(text, x + 2, y + 2, size, new Color(0, 0, 0, 220));
+        UiText.DrawText(text, x - 1, y, size, new Color(0, 0, 0, 120));
+        UiText.DrawText(text, x + 1, y, size, new Color(0, 0, 0, 120));
+        UiText.DrawText(text, x, y, size, color);
     }
 
     private static void DrawCenteredLabel(string text, int centerX, int y, int size)

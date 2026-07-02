@@ -10,6 +10,7 @@ public sealed class Game
     private const string Title = "Lords of Conquest";
 
     private readonly GameRenderer _renderer = new();
+    private readonly TitleScreenAssets _titleScreen = new();
     private GameConfig _menuConfig = new();
     private GameSession? _session;
     private bool _inMenu = true;
@@ -21,6 +22,8 @@ public sealed class Game
         Raylib.InitWindow(ScreenWidth, ScreenHeight, Title);
         Raylib.SetTargetFPS(60);
         UiText.Load();
+        _titleScreen.Load();
+        _renderer.SetTitleScreen(_titleScreen);
 
         try
         {
@@ -34,6 +37,7 @@ public sealed class Game
         finally
         {
             UiText.Unload();
+            _titleScreen.Dispose();
             Raylib.CloseWindow();
         }
     }
@@ -205,6 +209,7 @@ public sealed class Game
 
         if (_inMenu)
         {
+            DrawMenuButtonBackdrop();
             _renderer.DrawButtons(GetMenuButtons(), _menuSelection);
         }
         else if (_session != null)
@@ -234,10 +239,23 @@ public sealed class Game
         UiText.DrawText("MAIN MENU", (int)((w - 120) / 2), h / 2 + 20, 18, ClassicPalette.Text);
     }
 
+    private void DrawMenuButtonBackdrop()
+    {
+        var buttons = GetMenuButtons();
+        if (buttons.Count == 0) return;
+
+        float minX = buttons.Min(b => b.Rect.X) - 16;
+        float maxX = buttons.Max(b => b.Rect.X + b.Rect.Width) + 16;
+        float minY = buttons.Min(b => b.Rect.Y) - 12;
+        float maxY = buttons.Max(b => b.Rect.Y + b.Rect.Height) + 12;
+        Raylib.DrawRectangleRec(new Rectangle(minX, minY, maxX - minX, maxY - minY), new Color(0, 0, 0, 150));
+        Raylib.DrawRectangleLinesEx(new Rectangle(minX, minY, maxX - minX, maxY - minY), 1, new Color(255, 255, 255, 80));
+    }
+
     private List<(Rectangle Rect, string Label)> GetMenuButtons()
     {
         int x = ScreenWidth / 2 - 100;
-        int y = 280;
+        int y = 220;
         int w = 200;
         int h = 34;
         int gap = 12;
