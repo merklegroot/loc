@@ -40,9 +40,11 @@ public static class ResourceIcons
 
         int index = (int)type;
         int cellW = _sheet.Width / IconCount;
-        int cellH = _sheet.Height;
+        int crop = Math.Min(cellW, _sheet.Height);
+        int srcX = index * cellW + (cellW - crop) / 2;
+        int srcY = (_sheet.Height - crop) / 2;
 
-        var source = new Rectangle(index * cellW, 0, cellW, cellH);
+        var source = new Rectangle(srcX, srcY, crop, crop);
         var dest = new Rectangle(cx - size / 2f, cy - size / 2f, size, size);
         Raylib.DrawTexturePro(_sheet, source, dest, Vector2.Zero, 0, Color.WHITE);
     }
