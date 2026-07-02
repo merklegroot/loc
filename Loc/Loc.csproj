@@ -16,6 +16,7 @@
     <None Include="Fonts\OpenSans.ttf" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Fonts\OpenSans-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\title-screen.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets\resource-icons.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

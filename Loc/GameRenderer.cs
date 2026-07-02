@@ -155,7 +155,7 @@ public sealed class GameRenderer
 
             if (territory.Resource != null)
             {
-                ResourceIcons.Draw(territory.Resource.Value, px, py);
+                ResourceIcons.Draw(territory.Resource.Value, px, py, Math.Max(10, CellSize - 2));
             }
 
             if (territory.HasCity) DrawCityIcon(px + 6, py - 4);

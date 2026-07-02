@@ -25,6 +25,7 @@ public sealed class Game
         Raylib.SetExitKey(KeyboardKey.KEY_NULL);
         Raylib.SetTargetFPS(60);
         UiText.Load();
+        ResourceIcons.Load();
         _titleScreen.Load();
         _renderer.SetTitleScreen(_titleScreen);
 
@@ -40,6 +41,7 @@ public sealed class Game
         finally
         {
             UiText.Unload();
+            ResourceIcons.Unload();
             _titleScreen.Dispose();
             if (Raylib.IsWindowReady())
             {
