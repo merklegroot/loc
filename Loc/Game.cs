@@ -20,6 +20,7 @@ public sealed class Game
     public void Run()
     {
         Raylib.InitWindow(ScreenWidth, ScreenHeight, Title);
+        Raylib.SetExitKey(KeyboardKey.KEY_NULL);
         Raylib.SetTargetFPS(60);
         UiText.Load();
         _titleScreen.Load();
