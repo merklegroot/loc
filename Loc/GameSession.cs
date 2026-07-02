@@ -6,10 +6,10 @@ public sealed class GameSession
 {
     private static readonly Color[] PlayerColors =
     [
-        new(200, 60, 60, 255),
-        new(70, 120, 220, 255),
-        new(70, 180, 90, 255),
-        new(220, 190, 60, 255)
+        ClassicPalette.PlayerPink,
+        ClassicPalette.PlayerCyan,
+        ClassicPalette.PlayerGreen,
+        ClassicPalette.PlayerYellow
     ];
 
     private readonly Random _rng;
@@ -34,6 +34,9 @@ public sealed class GameSession
     public string? PendingDevelopment { get; private set; }
     public bool SkipProduction { get; private set; }
     public bool SkipShipment { get; private set; }
+    public int AttacksRemaining => _attacksRemaining;
+    public int? PendingAttackTarget => _pendingAttackTarget;
+    public int ConquestMenuIndex { get; set; } = 1;
 
     public GameSession(GameConfig config)
     {
@@ -188,7 +191,8 @@ public sealed class GameSession
                 StatusMessage = $"{CurrentPlayer.Name}: shipment — click a territory to move stockpile, or End Turn.";
                 break;
             case GamePhase.Conquest:
-                StatusMessage = $"{CurrentPlayer.Name}: conquest — plan an attack or end phase.";
+                StatusMessage = "Select a territory to attack.";
+                ConquestMenuIndex = 1;
                 break;
         }
     }
@@ -375,9 +379,57 @@ public sealed class GameSession
 
         _pendingAttackTarget = territoryId;
         SelectedTerritoryId = territoryId;
+        ConquestMenuIndex = 2;
         int atk = ForceCalculator.OffensiveForce(Map, target, CurrentPlayer.Id) + _attackBonus;
         int def = ForceCalculator.DefensiveForce(Map, target, target.OwnerId);
-        StatusMessage = $"Attack {target.Name}? Attack {atk} vs Defense {def}. Click again to confirm.";
+        StatusMessage = atk >= def ? "Attack will succeed." : atk < def ? "Attack may fail." : "Forces are equal.";
+    }
+
+    public void ReplanAttack()
+    {
+        _pendingAttackTarget = null;
+        SelectedTerritoryId = null;
+        ConquestMenuIndex = 1;
+        StatusMessage = "Select a territory to attack.";
+    }
+
+    public void ExitConquestMenu()
+    {
+        ReplanAttack();
+    }
+
+    public bool IsAutoWinTarget(int territoryId)
+    {
+        if (PendingAttackTarget != territoryId) return false;
+        if (PreviewCombat(territoryId) is not (int atk, int def)) return false;
+        return atk >= def;
+    }
+
+    public void HandleConquestAction(string action)
+    {
+        switch (action.ToUpperInvariant())
+        {
+            case "ATTACK":
+                ConfirmAttack();
+                break;
+            case "REPLAN":
+                ReplanAttack();
+                break;
+            case "EXIT":
+                if (_pendingAttackTarget != null) ExitConquestMenu();
+                else EndPlayerTurn();
+                break;
+            case "BRING FORCES":
+                StatusMessage = "Bring forces — coming soon.";
+                break;
+            case "END TURN":
+                ReplanAttack();
+                EndPlayerTurn();
+                break;
+            case "PLAN ATTACK":
+                StatusMessage = "Select a territory to attack.";
+                break;
+        }
     }
 
     public void ConfirmAttack()
@@ -563,15 +615,8 @@ public sealed class GameSession
             case GamePhase.Shipment when !SkipShipment:
                 MoveStockpile(territoryId);
                 break;
-            case GamePhase.Conquest when _attacksRemaining > 0:
-                if (_pendingAttackTarget == territoryId)
-                {
-                    ConfirmAttack();
-                }
-                else
-                {
-                    PlanAttack(territoryId);
-                }
+            case GamePhase.Conquest when _attacksRemaining > 0 && _pendingAttackTarget == null:
+                PlanAttack(territoryId);
                 break;
             case GamePhase.Development when PendingDevelopment != null:
                 HandleDevelopmentClick(territoryId);

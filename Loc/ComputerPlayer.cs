@@ -143,7 +143,7 @@ public static class ComputerPlayer
             if (!canWin) continue;
 
             session.PlanAttack(target.Id);
-            session.ConfirmAttack();
+            session.HandleConquestAction("ATTACK");
             if (session.Phase == GamePhase.GameOver) return;
             break;
         }

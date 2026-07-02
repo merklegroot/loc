@@ -14,6 +14,7 @@ public sealed class Game
     private GameSession? _session;
     private bool _inMenu = true;
     private float _aiTimer;
+    private int _menuSelection;
 
     public void Run()
     {
@@ -48,7 +49,7 @@ public sealed class Game
         if (_session == null) return;
 
         UpdateHover();
-        UpdateButtons();
+        UpdateInput();
 
         if (!_session.IsHumanTurn())
         {
@@ -64,13 +65,20 @@ public sealed class Game
     private void UpdateMenu()
     {
         var buttons = GetMenuButtons();
-        if (!Raylib.IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_LEFT)) return;
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_UP))
+            _menuSelection = (_menuSelection - 1 + buttons.Count) % buttons.Count;
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_DOWN))
+            _menuSelection = (_menuSelection + 1) % buttons.Count;
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_ENTER))
+            HandleMenuClick(buttons[_menuSelection].Label);
 
+        if (!Raylib.IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_LEFT)) return;
         var mouse = Raylib.GetMousePosition();
-        foreach (var (rect, label) in buttons)
+        for (int i = 0; i < buttons.Count; i++)
         {
-            if (!Raylib.CheckCollisionPointRec(mouse, rect)) continue;
-            HandleMenuClick(label);
+            if (!Raylib.CheckCollisionPointRec(mouse, buttons[i].Rect)) continue;
+            _menuSelection = i;
+            HandleMenuClick(buttons[i].Label);
             return;
         }
     }
@@ -79,29 +87,33 @@ public sealed class Game
     {
         switch (label)
         {
-            case "New Game":
+            case "NEW GAME":
                 _session = new GameSession(_menuConfig);
                 _session.StartNewGame();
                 _inMenu = false;
                 _aiTimer = 0.5f;
                 break;
-            case "Beginner":
+            case "BEGINNER":
                 _menuConfig = _menuConfig with { Level = GameLevel.Beginner };
                 break;
-            case "Intermediate":
+            case "INTERMEDIATE":
                 _menuConfig = _menuConfig with { Level = GameLevel.Intermediate };
                 break;
-            case "Low Chance":
+            case "LOW CHANCE":
                 _menuConfig = _menuConfig with { Chance = ChanceLevel.Low };
                 break;
-            case "Med Chance":
+            case "MED CHANCE":
                 _menuConfig = _menuConfig with { Chance = ChanceLevel.Medium };
                 break;
-            case "1 Human":
+            case "1 HUMAN":
                 _menuConfig = _menuConfig with { HumanPlayerCount = 1, TotalPlayers = 2 };
                 break;
-            case "2 Human":
+            case "2 HUMAN":
                 _menuConfig = _menuConfig with { HumanPlayerCount = 2, TotalPlayers = 2 };
+                break;
+            case "MAIN MENU":
+                _inMenu = true;
+                _session = null;
                 break;
         }
     }
@@ -113,46 +125,87 @@ public sealed class Game
         _session.HoveredTerritoryId = _renderer.TerritoryAt(_session, mouse);
     }
 
-    private void UpdateButtons()
+    private void UpdateInput()
     {
         if (_session == null || !_session.IsHumanTurn()) return;
+
+        if (_session.Phase == GamePhase.Conquest)
+        {
+            UpdateConquestInput();
+            return;
+        }
+
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_ENTER))
+        {
+            HandlePhaseAction("END TURN");
+        }
+
+        if (!Raylib.IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_LEFT)) return;
+
+        foreach (var (rect, label) in GetPhaseButtons())
+        {
+            if (Raylib.CheckCollisionPointRec(Raylib.GetMousePosition(), rect))
+            {
+                HandlePhaseAction(label);
+                return;
+            }
+        }
+
+        if (_session.HoveredTerritoryId is int tid)
+        {
+            _session.HandleTerritoryClick(tid);
+        }
+    }
+
+    private void UpdateConquestInput()
+    {
+        if (_session == null) return;
+
+        var menu = _renderer.GetConquestMenuRects(_session);
+        int count = menu.Count;
+
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_UP))
+            _session.ConquestMenuIndex = (_session.ConquestMenuIndex - 1 + count) % count;
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_DOWN))
+            _session.ConquestMenuIndex = (_session.ConquestMenuIndex + 1) % count;
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_ENTER))
+            _session.HandleConquestAction(menu[_session.ConquestMenuIndex].Label);
 
         if (Raylib.IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_LEFT))
         {
             var mouse = Raylib.GetMousePosition();
-            foreach (var (rect, label) in GetPhaseButtons())
+            for (int i = 0; i < menu.Count; i++)
             {
-                if (Raylib.CheckCollisionPointRec(mouse, rect))
-                {
-                    HandlePhaseButton(label);
-                    return;
-                }
+                if (!Raylib.CheckCollisionPointRec(mouse, menu[i].Rect)) continue;
+                _session.ConquestMenuIndex = i;
+                _session.HandleConquestAction(menu[i].Label);
+                return;
             }
 
-            if (_session.HoveredTerritoryId is int tid)
+            if (_session.HoveredTerritoryId is int tid && _session.PendingAttackTarget == null)
             {
                 _session.HandleTerritoryClick(tid);
             }
         }
     }
 
-    private void HandlePhaseButton(string label)
+    private void HandlePhaseAction(string label)
     {
         if (_session == null) return;
 
-        switch (label)
+        switch (label.ToUpperInvariant())
         {
-            case "Weapon":
+            case "WEAPON":
                 _session.SetPendingDevelopment("weapon");
                 break;
-            case "City":
+            case "CITY":
                 _session.SetPendingDevelopment("city");
                 break;
-            case "End Turn":
-            case "End Phase":
+            case "END TURN":
+            case "END PHASE":
                 _session.EndPlayerTurn();
                 break;
-            case "Main Menu":
+            case "MAIN MENU":
                 _inMenu = true;
                 _session = null;
                 break;
@@ -166,11 +219,15 @@ public sealed class Game
 
         if (_inMenu)
         {
-            _renderer.DrawButtons(GetMenuButtons());
+            _renderer.DrawButtons(GetMenuButtons(), _menuSelection);
         }
         else if (_session != null)
         {
-            _renderer.DrawButtons(GetPhaseButtons());
+            if (_session.Phase != GamePhase.Conquest)
+            {
+                _renderer.DrawButtons(GetPhaseButtons());
+            }
+
             if (_session.Phase == GamePhase.GameOver)
             {
                 DrawGameOver();
@@ -184,11 +241,11 @@ public sealed class Game
     {
         int w = Raylib.GetScreenWidth();
         int h = Raylib.GetScreenHeight();
-        Raylib.DrawRectangle(0, 0, w, h, new Color(0, 0, 0, 160));
-        string msg = $"{_session?.WinnerName} wins!";
+        Raylib.DrawRectangle(0, 0, w, h, new Color(0, 0, 0, 180));
+        string msg = $"{_session?.WinnerName?.ToUpperInvariant()} WINS!";
         Vector2 size = UiText.MeasureTextSize(msg, 40);
-        UiText.DrawText(msg, (int)((w - size.X) / 2), h / 2 - 40, 40, Color.GOLD);
-        UiText.DrawText("Click Main Menu", (int)((w - 160) / 2), h / 2 + 20, 18, Color.RAYWHITE);
+        UiText.DrawText(msg, (int)((w - size.X) / 2), h / 2 - 40, 40, ClassicPalette.PlayerPink);
+        UiText.DrawText("MAIN MENU", (int)((w - 120) / 2), h / 2 + 20, 18, ClassicPalette.Text);
     }
 
     private List<(Rectangle Rect, string Label)> GetMenuButtons()
@@ -196,17 +253,17 @@ public sealed class Game
         int x = ScreenWidth / 2 - 100;
         int y = 260;
         int w = 200;
-        int h = 34;
-        int gap = 8;
+        int h = 30;
+        int gap = 6;
         return
         [
-            (new Rectangle(x, y, w, h), "New Game"),
-            (new Rectangle(x - 110, y + 50, 95, h), "Beginner"),
-            (new Rectangle(x + 15, y + 50, 95, h), "Intermediate"),
-            (new Rectangle(x - 110, y + 50 + h + gap, 95, h), "Low Chance"),
-            (new Rectangle(x + 15, y + 50 + h + gap, 95, h), "Med Chance"),
-            (new Rectangle(x - 110, y + 50 + 2 * (h + gap), 95, h), "1 Human"),
-            (new Rectangle(x + 15, y + 50 + 2 * (h + gap), 95, h), "2 Human"),
+            (new Rectangle(x, y, w, h), "NEW GAME"),
+            (new Rectangle(x - 110, y + 50, 120, h), "BEGINNER"),
+            (new Rectangle(x + 15, y + 50, 120, h), "INTERMEDIATE"),
+            (new Rectangle(x - 110, y + 50 + h + gap, 120, h), "LOW CHANCE"),
+            (new Rectangle(x + 15, y + 50 + h + gap, 120, h), "MED CHANCE"),
+            (new Rectangle(x - 110, y + 50 + 2 * (h + gap), 120, h), "1 HUMAN"),
+            (new Rectangle(x + 15, y + 50 + 2 * (h + gap), 120, h), "2 HUMAN"),
         ];
     }
 
@@ -214,11 +271,10 @@ public sealed class Game
     {
         if (_session == null) return [];
 
-        int sidebar = ScreenWidth - 280;
-        int x = sidebar + 12;
-        int y = 320;
-        int w = 256;
-        int h = 30;
+        int y = ScreenHeight - 130;
+        int x = ScreenWidth / 2;
+        int w = 180;
+        int h = 28;
         int gap = 6;
         var buttons = new List<(Rectangle, string)>();
 
@@ -226,27 +282,20 @@ public sealed class Game
         {
             case GamePhase.Development:
                 if (_session.CanDevelopWeapon())
-                    buttons.Add((new Rectangle(x, y, w, h), "Weapon"));
+                    buttons.Add((new Rectangle(x, y, w, h), "WEAPON"));
                 y += h + gap;
                 if (_session.CanDevelopCity())
-                    buttons.Add((new Rectangle(x, y, w, h), "City"));
+                    buttons.Add((new Rectangle(x, y, w, h), "CITY"));
                 y += h + gap;
-                buttons.Add((new Rectangle(x, y, w, h), "End Turn"));
-                break;
-            case GamePhase.Production:
+                buttons.Add((new Rectangle(x, y, w, h), "END TURN"));
                 break;
             case GamePhase.Shipment:
-                buttons.Add((new Rectangle(x, y, w, h), "End Turn"));
-                break;
-            case GamePhase.Conquest:
-                buttons.Add((new Rectangle(x, y, w, h), "End Turn"));
-                break;
             case GamePhase.Trading:
-                buttons.Add((new Rectangle(x, y, w, h), "End Turn"));
+                buttons.Add((new Rectangle(x, y, w, h), "END TURN"));
                 break;
         }
 
-        buttons.Add((new Rectangle(x, ScreenHeight - 44, w, h), "Main Menu"));
+        buttons.Add((new Rectangle(x, ScreenHeight - 44, w, h), "MAIN MENU"));
         return buttons;
     }
 }
