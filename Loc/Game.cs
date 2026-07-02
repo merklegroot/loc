@@ -14,6 +14,7 @@ public sealed class Game
     private GameConfig _menuConfig = new();
     private GameSession? _session;
     private bool _inMenu = true;
+    private bool _viewingResources;
     private bool _shouldQuit;
     private float _aiTimer;
     private int _menuSelection;
@@ -81,6 +82,13 @@ public sealed class Game
         if (Raylib.IsKeyPressed(KeyboardKey.KEY_ENTER))
             HandleMenuClick(buttons[_menuSelection].Label);
 
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_ESCAPE) && _viewingResources)
+        {
+            _viewingResources = false;
+            _menuSelection = 0;
+            return;
+        }
+
         if (!Raylib.IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_LEFT)) return;
         var mouse = Raylib.GetMousePosition();
         for (int i = 0; i < buttons.Count; i++)
@@ -102,11 +110,20 @@ public sealed class Game
                 _inMenu = false;
                 _aiTimer = 0.5f;
                 break;
+            case "RESOURCES":
+                _viewingResources = true;
+                _menuSelection = 0;
+                break;
+            case "BACK":
+                _viewingResources = false;
+                _menuSelection = 0;
+                break;
             case "EXIT":
                 _shouldQuit = true;
                 break;
             case "MAIN MENU":
                 _inMenu = true;
+                _viewingResources = false;
                 _session = null;
                 _menuSelection = 0;
                 break;
@@ -216,6 +233,10 @@ public sealed class Game
         {
             DrawMenuButtonBackdrop();
             _renderer.DrawButtons(GetMenuButtons(), _menuSelection);
+            if (_viewingResources)
+            {
+                _renderer.DrawResourcesScreen();
+            }
         }
         else if (_session != null)
         {
@@ -260,14 +281,22 @@ public sealed class Game
     private List<(Rectangle Rect, string Label)> GetMenuButtons()
     {
         int x = ScreenWidth / 2 - 100;
-        int y = 220;
         int w = 200;
         int h = 34;
         int gap = 12;
+
+        if (_viewingResources)
+        {
+            int backY = ScreenHeight / 2 + 230;
+            return [(new Rectangle(x, backY, w, h), "BACK")];
+        }
+
+        int y = 220;
         return
         [
             (new Rectangle(x, y, w, h), "NEW GAME"),
-            (new Rectangle(x, y + h + gap, w, h), "EXIT"),
+            (new Rectangle(x, y + h + gap, w, h), "RESOURCES"),
+            (new Rectangle(x, y + 2 * (h + gap), w, h), "EXIT"),
         ];
     }
 

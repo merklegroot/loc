@@ -403,6 +403,62 @@ public sealed class GameRenderer
         UiText.DrawText(text, centerX - (int)(measured.X / 2), y, size, ClassicPalette.Text);
     }
 
+    public void DrawResourcesScreen()
+    {
+        int w = Raylib.GetScreenWidth();
+        int h = Raylib.GetScreenHeight();
+        int panelW = 560;
+        int panelH = 420;
+        int px = (w - panelW) / 2;
+        int py = (h - panelH) / 2;
+
+        Raylib.DrawRectangle(0, 0, w, h, new Color(0, 0, 0, 180));
+        Raylib.DrawRectangle(px, py, panelW, panelH, new Color(16, 20, 32, 250));
+        Raylib.DrawRectangleLines(px, py, panelW, panelH, ClassicPalette.PanelBorder);
+
+        DrawCenteredLabelWithShadow("RESOURCES", w / 2, py + 20, 28, new Color(255, 228, 160, 255));
+
+        int y = py + 64;
+        foreach (var entry in ResourceGuide.All)
+        {
+            string name = entry.Type.ToString().ToUpperInvariant();
+            UiText.DrawText(name, px + 24, y, 18, ClassicPalette.PlayerCyan);
+            UiText.DrawText(entry.Site.ToUpperInvariant(), px + 24, y + 22, 13, ClassicPalette.Text);
+
+            DrawWrappedText(entry.Description, px + 24, y + 42, panelW - 48, 13, new Color(200, 200, 200, 255));
+            y += 72;
+        }
+
+        DrawCenteredLabel("BEGINNER GAMES USE GOLD AND HORSES ONLY", w / 2, py + panelH - 56, 12);
+    }
+
+    private static void DrawWrappedText(string text, int x, int y, int maxWidth, int size, Color color)
+    {
+        var words = text.Split(' ');
+        string line = "";
+        int lineY = y;
+
+        foreach (string word in words)
+        {
+            string trial = line.Length == 0 ? word : $"{line} {word}";
+            if (UiText.MeasureTextSize(trial, size).X > maxWidth && line.Length > 0)
+            {
+                UiText.DrawText(line, x, lineY, size, color);
+                lineY += size + 4;
+                line = word;
+            }
+            else
+            {
+                line = trial;
+            }
+        }
+
+        if (line.Length > 0)
+        {
+            UiText.DrawText(line, x, lineY, size, color);
+        }
+    }
+
     public int? TerritoryAt(GameSession session, Vector2 mouse)
     {
         var map = session.Map;
