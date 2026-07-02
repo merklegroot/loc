@@ -14,6 +14,7 @@ public sealed class Game
     private GameConfig _menuConfig = new();
     private GameSession? _session;
     private bool _inMenu = true;
+    private bool _shouldQuit;
     private float _aiTimer;
     private int _menuSelection;
 
@@ -28,7 +29,7 @@ public sealed class Game
 
         try
         {
-            while (!Raylib.WindowShouldClose())
+            while (!_shouldQuit && !Raylib.WindowShouldClose())
             {
                 float dt = Raylib.GetFrameTime();
                 Update(dt);
@@ -39,7 +40,10 @@ public sealed class Game
         {
             UiText.Unload();
             _titleScreen.Dispose();
-            Raylib.CloseWindow();
+            if (Raylib.IsWindowReady())
+            {
+                Raylib.CloseWindow();
+            }
         }
     }
 
@@ -99,7 +103,7 @@ public sealed class Game
                 _aiTimer = 0.5f;
                 break;
             case "EXIT":
-                Raylib.CloseWindow();
+                _shouldQuit = true;
                 break;
             case "MAIN MENU":
                 _inMenu = true;
