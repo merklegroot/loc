@@ -155,36 +155,13 @@ public sealed class GameRenderer
 
             if (territory.Resource != null)
             {
-                DrawResourceIcon(px, py, territory.Resource.Value);
+                ResourceIcons.Draw(territory.Resource.Value, px, py);
             }
 
             if (territory.HasCity) DrawCityIcon(px + 6, py - 4);
             if (territory.HasWeapon) DrawWeaponIcon(px - 8, py - 2);
             if (territory.HasHorse) DrawHorseIcon(px, py + 5);
             if (territory.IsStockpile) DrawStockpileIcon(px - 4, py + 6);
-        }
-    }
-
-    private static void DrawResourceIcon(int cx, int cy, ResourceType type)
-    {
-        switch (type)
-        {
-            case ResourceType.Gold:
-                Raylib.DrawLine(cx - 3, cy - 3, cx + 3, cy + 3, ClassicPalette.Border);
-                Raylib.DrawLine(cx + 3, cy - 3, cx - 3, cy + 3, ClassicPalette.Border);
-                break;
-            case ResourceType.Horses:
-                Raylib.DrawRectangle(cx - 2, cy - 1, 5, 3, ClassicPalette.Border);
-                break;
-            case ResourceType.Iron:
-                Raylib.DrawRectangle(cx - 2, cy - 2, 4, 4, ClassicPalette.Border);
-                break;
-            case ResourceType.Coal:
-                Raylib.DrawCircle(cx, cy, 2, ClassicPalette.Border);
-                break;
-            case ResourceType.Timber:
-                Raylib.DrawRectangle(cx - 1, cy - 3, 2, 6, ClassicPalette.Border);
-                break;
         }
     }
 
@@ -419,14 +396,21 @@ public sealed class GameRenderer
         DrawCenteredLabelWithShadow("RESOURCES", w / 2, py + 20, 28, new Color(255, 228, 160, 255));
 
         int y = py + 64;
+        const int rowHeight = 72;
+        int textX = px + 88;
+        int iconX = px + 44;
+
         foreach (var entry in ResourceGuide.All)
         {
-            string name = entry.Type.ToString().ToUpperInvariant();
-            UiText.DrawText(name, px + 24, y, 18, ClassicPalette.PlayerCyan);
-            UiText.DrawText(entry.Site.ToUpperInvariant(), px + 24, y + 22, 13, ClassicPalette.Text);
+            int rowCenterY = y + rowHeight / 2;
+            ResourceIcons.DrawBoxed(entry.Type, iconX, rowCenterY);
 
-            DrawWrappedText(entry.Description, px + 24, y + 42, panelW - 48, 13, new Color(200, 200, 200, 255));
-            y += 72;
+            string name = entry.Type.ToString().ToUpperInvariant();
+            UiText.DrawText(name, textX, y, 18, ClassicPalette.PlayerCyan);
+            UiText.DrawText(entry.Site.ToUpperInvariant(), textX, y + 22, 13, ClassicPalette.Text);
+
+            DrawWrappedText(entry.Description, textX, y + 42, panelW - textX + px - 24, 13, new Color(200, 200, 200, 255));
+            y += rowHeight;
         }
 
         DrawCenteredLabel("BEGINNER GAMES USE GOLD AND HORSES ONLY", w / 2, py + panelH - 56, 12);
