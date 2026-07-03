@@ -60,26 +60,88 @@ public sealed class GameRenderer
     private void DrawMap(GameSession session)
     {
         var map = session.Map;
+        int gapHalf = Math.Max(1, CellSize / 6);
 
         for (int x = 0; x < map.Width; x++)
         {
             for (int y = 0; y < map.Height; y++)
             {
-                int px = MapOffsetX + x * CellSize;
-                int py = MapOffsetY + y * CellSize;
-
                 if (map.IsWater[x, y]) continue;
-
-                int tid = map.TerritoryGrid[x, y];
-                var territory = map.GetTerritory(tid)!;
-                Color fill = TerritoryFill(session, territory, tid, x, y);
-
-                Raylib.DrawRectangle(px, py, CellSize, CellSize, fill);
+                DrawTerritoryCell(session, map, x, y, gapHalf);
             }
         }
 
-        DrawTerritoryBorders(map);
         DrawTerritoryIcons(session);
+    }
+
+    private void DrawTerritoryCell(GameSession session, WorldMap map, int x, int y, int gapHalf)
+    {
+        int px = MapOffsetX + x * CellSize;
+        int py = MapOffsetY + y * CellSize;
+
+        bool borderNorth = !SameRegion(map, x, y, x, y - 1);
+        bool borderSouth = !SameRegion(map, x, y, x, y + 1);
+        bool borderWest = !SameRegion(map, x, y, x - 1, y);
+        bool borderEast = !SameRegion(map, x, y, x + 1, y);
+
+        int fillX = px + (borderWest ? gapHalf : 0);
+        int fillY = py + (borderNorth ? gapHalf : 0);
+        int fillW = CellSize - (borderWest ? gapHalf : 0) - (borderEast ? gapHalf : 0);
+        int fillH = CellSize - (borderNorth ? gapHalf : 0) - (borderSouth ? gapHalf : 0);
+        if (fillW <= 0 || fillH <= 0) return;
+
+        int tid = map.TerritoryGrid[x, y];
+        var territory = map.GetTerritory(tid)!;
+        Color fill = TerritoryFill(session, territory, tid, x, y);
+        Raylib.DrawRectangle(fillX, fillY, fillW, fillH, fill);
+
+        DrawInsetBorder(fillX, fillY, fillW, fillH, borderNorth, borderSouth, borderWest, borderEast);
+    }
+
+    private void DrawInsetBorder(
+        int x, int y, int w, int h, bool borderNorth, bool borderSouth, bool borderWest, bool borderEast)
+    {
+        int radius = Math.Clamp(Math.Min(w, h) / 3, 2, Math.Min(w, h) / 2 - 1);
+        if (radius < 1) radius = 1;
+
+        Color border = ClassicPalette.Border;
+        bool roundTopLeft = borderNorth && borderWest;
+        bool roundTopRight = borderNorth && borderEast;
+        bool roundBottomLeft = borderSouth && borderWest;
+        bool roundBottomRight = borderSouth && borderEast;
+
+        if (borderNorth)
+        {
+            int x0 = x + (roundTopLeft ? radius : 0);
+            int x1 = x + w - (roundTopRight ? radius : 0);
+            if (x1 > x0) Raylib.DrawLine(x0, y, x1, y, border);
+        }
+
+        if (borderSouth)
+        {
+            int x0 = x + (roundBottomLeft ? radius : 0);
+            int x1 = x + w - (roundBottomRight ? radius : 0);
+            if (x1 > x0) Raylib.DrawLine(x0, y + h, x1, y + h, border);
+        }
+
+        if (borderWest)
+        {
+            int y0 = y + (roundTopLeft ? radius : 0);
+            int y1 = y + h - (roundBottomLeft ? radius : 0);
+            if (y1 > y0) Raylib.DrawLine(x, y0, x, y1, border);
+        }
+
+        if (borderEast)
+        {
+            int y0 = y + (roundTopRight ? radius : 0);
+            int y1 = y + h - (roundBottomRight ? radius : 0);
+            if (y1 > y0) Raylib.DrawLine(x + w, y0, x + w, y1, border);
+        }
+
+        if (roundTopLeft) DrawBorderArc(x + radius, y + radius, radius, 180, 270, border);
+        if (roundTopRight) DrawBorderArc(x + w - radius, y + radius, radius, 270, 360, border);
+        if (roundBottomLeft) DrawBorderArc(x + radius, y + h - radius, radius, 90, 180, border);
+        if (roundBottomRight) DrawBorderArc(x + w - radius, y + h - radius, radius, 0, 90, border);
     }
 
     private Color TerritoryFill(GameSession session, Territory territory, int tid, int x, int y)
@@ -113,73 +175,6 @@ public sealed class GameRenderer
         (byte)Math.Min(255, c.B + amount),
         (byte)255);
 
-    private void DrawTerritoryBorders(WorldMap map)
-    {
-        int radius = Math.Clamp(CellSize / 3, 2, CellSize / 2 - 1);
-        Color border = ClassicPalette.Border;
-
-        for (int x = 0; x < map.Width; x++)
-        {
-            for (int y = 0; y < map.Height; y++)
-            {
-                if (map.IsWater[x, y]) continue;
-
-                int px = MapOffsetX + x * CellSize;
-                int py = MapOffsetY + y * CellSize;
-
-                if (x + 1 < map.Width && !SameRegion(map, x, y, x + 1, y))
-                {
-                    bool roundTop = !SameRegion(map, x, y, x, y - 1);
-                    bool roundBottom = !SameRegion(map, x, y, x, y + 1);
-                    int xLine = px + CellSize;
-                    int y0 = py + (roundTop ? radius : 0);
-                    int y1 = py + CellSize - (roundBottom ? radius : 0);
-                    if (y1 > y0)
-                    {
-                        Raylib.DrawLine(xLine, y0, xLine, y1, border);
-                    }
-
-                    if (roundTop)
-                    {
-                        DrawBorderArc(xLine - radius, py + radius, radius, 270, 360, border);
-                    }
-
-                    if (roundBottom)
-                    {
-                        DrawBorderArc(xLine - radius, py + CellSize - radius, radius, 0, 90, border);
-                    }
-                }
-
-                if (y + 1 < map.Height && !SameRegion(map, x, y, x, y + 1))
-                {
-                    bool roundLeft = !SameRegion(map, x, y, x - 1, y);
-                    int yLine = py + CellSize;
-                    int x0 = px + (roundLeft ? radius : 0);
-                    int x1 = px + CellSize - radius;
-                    if (x1 > x0)
-                    {
-                        Raylib.DrawLine(x0, yLine, x1, yLine, border);
-                    }
-
-                    if (roundLeft)
-                    {
-                        DrawBorderArc(px + radius, yLine - radius, radius, 180, 270, border);
-                    }
-                }
-            }
-        }
-    }
-
-    private static bool SameRegion(WorldMap map, int x1, int y1, int x2, int y2) =>
-        RegionAt(map, x1, y1) == RegionAt(map, x2, y2);
-
-    private static int RegionAt(WorldMap map, int x, int y)
-    {
-        if (x < 0 || y < 0 || x >= map.Width || y >= map.Height) return -1;
-        if (map.IsWater[x, y]) return -1;
-        return map.TerritoryGrid[x, y];
-    }
-
     private static void DrawBorderArc(int cx, int cy, int radius, int startDegrees, int endDegrees, Color color)
     {
         const int segments = 8;
@@ -197,6 +192,16 @@ public sealed class GameRenderer
             int y1 = cy + (int)Math.Round(Math.Sin(a1) * radius);
             Raylib.DrawLine(x0, y0, x1, y1, color);
         }
+    }
+
+    private static bool SameRegion(WorldMap map, int x1, int y1, int x2, int y2) =>
+        RegionAt(map, x1, y1) == RegionAt(map, x2, y2);
+
+    private static int RegionAt(WorldMap map, int x, int y)
+    {
+        if (x < 0 || y < 0 || x >= map.Width || y >= map.Height) return -1;
+        if (map.IsWater[x, y]) return -1;
+        return map.TerritoryGrid[x, y];
     }
 
     private void DrawTerritoryIcons(GameSession session)
