@@ -100,6 +100,13 @@ public sealed class Game
             HandleMenuClick(buttons[i].Label);
             return;
         }
+
+        if (_viewingResources &&
+            !Raylib.CheckCollisionPointRec(mouse, ResourcesPanel.PanelRect(ScreenWidth, ScreenHeight)))
+        {
+            _viewingResources = false;
+            _menuSelection = 0;
+        }
     }
 
     private void HandleMenuClick(string label)
@@ -236,7 +243,6 @@ public sealed class Game
             if (_viewingResources)
             {
                 _renderer.DrawResourcesScreen();
-                DrawMenuButtonBackdrop();
                 _renderer.DrawButtons(GetMenuButtons(), _menuSelection);
             }
             else
@@ -294,10 +300,7 @@ public sealed class Game
 
         if (_viewingResources)
         {
-            const int panelH = 420;
-            int panelY = (ScreenHeight - panelH) / 2;
-            int backY = panelY + panelH + 16;
-            return [(new Rectangle(x, backY, w, h), "BACK")];
+            return [(ResourcesPanel.BackButtonRect(ScreenWidth, ScreenHeight), "BACK")];
         }
 
         int y = 220;

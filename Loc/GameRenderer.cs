@@ -317,19 +317,23 @@ public sealed class GameRenderer
         {
             var (rect, label) = buttons[i];
             bool selected = i == selectedIndex;
+            Vector2 size = UiText.MeasureTextSize(label, 16);
+            int textX = (int)(rect.X + (rect.Width - size.X) / 2);
+            int textY = (int)(rect.Y + (rect.Height - size.Y) / 2);
+
             if (selected)
             {
                 Raylib.DrawRectangleRec(rect, ClassicPalette.Highlight);
-                Vector2 size = UiText.MeasureTextSize(label, 16);
-                UiText.DrawText(label, (int)(rect.X + 8), (int)(rect.Y + (rect.Height - size.Y) / 2), 16, ClassicPalette.HighlightText);
+                Raylib.DrawRectangleLinesEx(rect, 1, ClassicPalette.PanelBorder);
+                UiText.DrawText(label, textX, textY, 16, ClassicPalette.HighlightText);
             }
             else
             {
                 var mouse = Raylib.GetMousePosition();
                 bool hover = Raylib.CheckCollisionPointRec(mouse, rect);
-                if (hover) Raylib.DrawRectangleRec(rect, new Color(40, 40, 40, 255));
-                Vector2 size = UiText.MeasureTextSize(label, 16);
-                UiText.DrawText(label, (int)(rect.X + 8), (int)(rect.Y + (rect.Height - size.Y) / 2), 16, ClassicPalette.Text);
+                Raylib.DrawRectangleRec(rect, hover ? new Color(50, 60, 80, 255) : new Color(28, 34, 50, 255));
+                Raylib.DrawRectangleLinesEx(rect, 1, ClassicPalette.PanelBorder);
+                UiText.DrawText(label, textX, textY, 16, ClassicPalette.Text);
             }
         }
     }
@@ -384,10 +388,9 @@ public sealed class GameRenderer
     {
         int w = Raylib.GetScreenWidth();
         int h = Raylib.GetScreenHeight();
-        int panelW = 560;
-        int panelH = 420;
-        int px = (w - panelW) / 2;
-        int py = (h - panelH) / 2;
+        (int px, int py) = ResourcesPanel.Origin(w, h);
+        int panelW = ResourcesPanel.Width;
+        int panelH = ResourcesPanel.Height;
 
         Raylib.DrawRectangle(0, 0, w, h, new Color(0, 0, 0, 180));
         Raylib.DrawRectangle(px, py, panelW, panelH, new Color(16, 20, 32, 250));
@@ -395,8 +398,8 @@ public sealed class GameRenderer
 
         DrawCenteredLabelWithShadow("RESOURCES", w / 2, py + 20, 28, new Color(255, 228, 160, 255));
 
-        int y = py + 64;
-        const int rowHeight = 72;
+        int y = py + 52;
+        const int rowHeight = 62;
         int textX = px + 88;
         int iconX = px + 44;
 
@@ -407,13 +410,13 @@ public sealed class GameRenderer
 
             string name = entry.Type.ToString().ToUpperInvariant();
             UiText.DrawText(name, textX, y, 18, ClassicPalette.PlayerCyan);
-            UiText.DrawText(entry.Site.ToUpperInvariant(), textX, y + 22, 13, ClassicPalette.Text);
+            UiText.DrawText(entry.Site.ToUpperInvariant(), textX, y + 20, 13, ClassicPalette.Text);
 
-            DrawWrappedText(entry.Description, textX, y + 42, panelW - textX + px - 24, 13, new Color(200, 200, 200, 255));
+            DrawWrappedText(entry.Description, textX, y + 38, panelW - textX + px - 24, 13, new Color(200, 200, 200, 255));
             y += rowHeight;
         }
 
-        DrawCenteredLabel("BEGINNER GAMES USE GOLD AND HORSES ONLY", w / 2, py + panelH - 56, 12);
+        DrawCenteredLabel("BEGINNER GAMES USE GOLD AND HORSES ONLY", w / 2, py + panelH - 62, 12);
     }
 
     private static void DrawWrappedText(string text, int x, int y, int maxWidth, int size, Color color)
