@@ -64,6 +64,8 @@ public sealed class Game
         UpdateHover();
         UpdateInput();
 
+        if (_session == null || _inMenu) return;
+
         if (_session.Phase == GamePhase.TerritorySelection && _autoTerritorySelection)
         {
             _aiTimer -= dt;
