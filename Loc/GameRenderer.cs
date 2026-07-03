@@ -403,7 +403,7 @@ public sealed class GameRenderer
     {
         foreach (var territory in session.Map.Territories)
         {
-            var (cx, cy) = territory.Center;
+            var (cx, cy) = territory.GetDisplayCell(session.Map);
             int px = MapOffsetX + cx * CellSize + CellSize / 2;
             int py = MapOffsetY + cy * CellSize + CellSize / 2;
 
