@@ -67,197 +67,288 @@ public sealed class GameRenderer
             for (int y = 0; y < map.Height; y++)
             {
                 if (map.IsWater[x, y]) continue;
-                DrawTerritoryCell(session, map, x, y, gapHalf);
+                DrawTerritoryCellFill(session, map, x, y, gapHalf);
+            }
+        }
+
+        for (int x = 0; x < map.Width; x++)
+        {
+            for (int y = 0; y < map.Height; y++)
+            {
+                if (map.IsWater[x, y]) continue;
+                DrawTerritoryCellBorder(map, x, y, gapHalf);
             }
         }
 
         DrawTerritoryIcons(session);
     }
 
-    private void DrawTerritoryCell(GameSession session, WorldMap map, int x, int y, int gapHalf)
+    private readonly struct TerritoryCellShape
     {
-        int px = MapOffsetX + x * CellSize;
-        int py = MapOffsetY + y * CellSize;
+        public required Rectangle Fill { get; init; }
+        public required int Radius { get; init; }
+        public required float Roundness { get; init; }
+        public required int Segments { get; init; }
+        public required bool BorderNorth { get; init; }
+        public required bool BorderSouth { get; init; }
+        public required bool BorderWest { get; init; }
+        public required bool BorderEast { get; init; }
+        public required bool RoundTopLeft { get; init; }
+        public required bool RoundTopRight { get; init; }
+        public required bool RoundBottomLeft { get; init; }
+        public required bool RoundBottomRight { get; init; }
 
-        bool borderNorth = !SameRegion(map, x, y, x, y - 1);
-        bool borderSouth = !SameRegion(map, x, y, x, y + 1);
-        bool borderWest = !SameRegion(map, x, y, x - 1, y);
-        bool borderEast = !SameRegion(map, x, y, x + 1, y);
+        public bool AnyRoundedCorner =>
+            RoundTopLeft || RoundTopRight || RoundBottomLeft || RoundBottomRight;
 
-        int fillX = px + (borderWest ? gapHalf : 0);
-        int fillY = py + (borderNorth ? gapHalf : 0);
-        int fillW = CellSize - (borderWest ? gapHalf : 0) - (borderEast ? gapHalf : 0);
-        int fillH = CellSize - (borderNorth ? gapHalf : 0) - (borderSouth ? gapHalf : 0);
-        if (fillW <= 0 || fillH <= 0) return;
+        public bool FullyEnclosed =>
+            BorderNorth && BorderSouth && BorderEast && BorderWest;
+    }
 
-        int tid = map.TerritoryGrid[x, y];
-        var territory = map.GetTerritory(tid)!;
-        Color fill = TerritoryFill(session, territory, tid, x, y);
+    private static TerritoryCellShape ComputeTerritoryCellShape(
+        WorldMap map, int gx, int gy, int pixelX, int pixelY, int cellSize, int gapHalf)
+    {
+        bool borderNorth = !SameRegion(map, gx, gy, gx, gy - 1);
+        bool borderSouth = !SameRegion(map, gx, gy, gx, gy + 1);
+        bool borderWest = !SameRegion(map, gx, gy, gx - 1, gy);
+        bool borderEast = !SameRegion(map, gx, gy, gx + 1, gy);
+
+        int fillX = pixelX + (borderWest ? gapHalf : 0);
+        int fillY = pixelY + (borderNorth ? gapHalf : 0);
+        int fillW = cellSize - (borderWest ? gapHalf : 0) - (borderEast ? gapHalf : 0);
+        int fillH = cellSize - (borderNorth ? gapHalf : 0) - (borderSouth ? gapHalf : 0);
 
         bool roundTopLeft = borderNorth && borderWest;
         bool roundTopRight = borderNorth && borderEast;
         bool roundBottomLeft = borderSouth && borderWest;
         bool roundBottomRight = borderSouth && borderEast;
-        float radius = ComputeCornerRadius(fillW, fillH);
 
-        DrawRoundedFill(fillX, fillY, fillW, fillH, radius, roundTopLeft, roundTopRight, roundBottomLeft, roundBottomRight, fill);
-        DrawInsetBorder(fillX, fillY, fillW, fillH, radius, borderNorth, borderSouth, borderWest, borderEast,
-            roundTopLeft, roundTopRight, roundBottomLeft, roundBottomRight);
+        int radius = ComputeCornerRadius(fillW, fillH, gapHalf);
+
+        // Only attempt rounding on a corner if there's enough room.
+        if (radius < 2)
+        {
+            roundTopLeft = roundTopRight = roundBottomLeft = roundBottomRight = false;
+            radius = 0;
+        }
+
+        float roundness = radius > 0
+            ? Math.Clamp(radius / (Math.Min(fillW, fillH) * 0.5f), 0.1f, 1f)
+            : 0f;
+        int segments = radius > 0 ? Math.Max(24, radius * 10) : 8;
+
+        return new TerritoryCellShape
+        {
+            Fill = new Rectangle(fillX, fillY, fillW, fillH),
+            Radius = radius,
+            Roundness = roundness,
+            Segments = segments,
+            BorderNorth = borderNorth,
+            BorderSouth = borderSouth,
+            BorderWest = borderWest,
+            BorderEast = borderEast,
+            RoundTopLeft = roundTopLeft,
+            RoundTopRight = roundTopRight,
+            RoundBottomLeft = roundBottomLeft,
+            RoundBottomRight = roundBottomRight
+        };
+    }
+
+    private void DrawTerritoryCellFill(GameSession session, WorldMap map, int x, int y, int gapHalf)
+    {
+        int px = MapOffsetX + x * CellSize;
+        int py = MapOffsetY + y * CellSize;
+        var shape = ComputeTerritoryCellShape(map, x, y, px, py, CellSize, gapHalf);
+        if (shape.Fill.Width <= 0 || shape.Fill.Height <= 0) return;
+
+        int tid = map.TerritoryGrid[x, y];
+        var territory = map.GetTerritory(tid)!;
+        Color fill = TerritoryFill(session, territory, tid, x, y);
+        DrawTerritoryFill(shape, fill);
+    }
+
+    private void DrawTerritoryCellBorder(WorldMap map, int x, int y, int gapHalf)
+    {
+        int px = MapOffsetX + x * CellSize;
+        int py = MapOffsetY + y * CellSize;
+        var shape = ComputeTerritoryCellShape(map, x, y, px, py, CellSize, gapHalf);
+        if (shape.Fill.Width <= 0 || shape.Fill.Height <= 0) return;
+        DrawTerritoryBorder(shape);
     }
 
     private const float BorderThickness = 1.5f;
 
-    private static float ComputeCornerRadius(float w, float h)
+    private static int ComputeCornerRadius(int w, int h, int gapHalf)
     {
-        float maxRadius = Math.Min(w, h) * 0.5f - BorderThickness - 0.5f;
-        if (maxRadius < 1f) return 0f;
-        return Math.Min(Math.Min(w, h) / 3f, maxRadius);
+        if (w < 5 || h < 5) return 0;
+        int maxByDim = Math.Min(w, h) / 2 - 2;
+        if (maxByDim < 2) return 0;
+        // Bias toward a pleasantly round but not overly bulbous corner.
+        // Tie it to the gap so the rounding lives nicely in the separation zone.
+        int pref = Math.Min(gapHalf + 1, Math.Min(w, h) / 3);
+        return Math.Min(pref, maxByDim);
     }
 
-    private static void DrawRoundedFill(
-        float x, float y, float w, float h, float radius,
-        bool roundTopLeft, bool roundTopRight, bool roundBottomLeft, bool roundBottomRight, Color fill)
+    private static void DrawTerritoryFill(TerritoryCellShape shape, Color fill)
     {
-        if (radius < 1f || (!roundTopLeft && !roundTopRight && !roundBottomLeft && !roundBottomRight))
+        var rect = shape.Fill;
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+
+        int r = shape.Radius;
+        if (r < 2 || !shape.AnyRoundedCorner)
         {
-            Raylib.DrawRectangle((int)x, (int)y, (int)w, (int)h, fill);
+            Raylib.DrawRectangleRec(rect, fill);
             return;
         }
 
-        int segments = Math.Max(12, (int)Math.Ceiling(radius * 6));
+        int L = (int)rect.X;
+        int T = (int)rect.Y;
+        int W = (int)rect.Width;
+        int H = (int)rect.Height;
+        int R = L + W;
+        int B = T + H;
 
-        if (roundTopLeft && roundTopRight && roundBottomLeft && roundBottomRight)
+        // Amounts to reserve on each side for rounding (only if that side participates in a rounded corner).
+        int leftR = (shape.RoundTopLeft || shape.RoundBottomLeft) ? r : 0;
+        int rightR = (shape.RoundTopRight || shape.RoundBottomRight) ? r : 0;
+        int topR = (shape.RoundTopLeft || shape.RoundTopRight) ? r : 0;
+        int bottomR = (shape.RoundBottomLeft || shape.RoundBottomRight) ? r : 0;
+
+        // For completely rounded cells, use the high-quality path.
+        if (shape.RoundTopLeft && shape.RoundTopRight && shape.RoundBottomLeft && shape.RoundBottomRight)
         {
-            float roundness = Math.Clamp(radius / (Math.Min(w, h) * 0.5f), 0.05f, 1f);
-            Raylib.DrawRectangleRounded(new Rectangle(x, y, w, h), roundness, segments, fill);
+            Raylib.DrawRectangleRounded(rect, shape.Roundness, shape.Segments, fill);
             return;
         }
 
-        float leftInset = roundTopLeft || roundBottomLeft ? radius : 0f;
-        float rightInset = roundTopRight || roundBottomRight ? radius : 0f;
-        float topInset = roundTopLeft || roundTopRight ? radius : 0f;
-        float bottomInset = roundBottomLeft || roundBottomRight ? radius : 0f;
-
-        float innerW = w - leftInset - rightInset;
-        float innerH = h - topInset - bottomInset;
-        if (innerW > 0f && innerH > 0f)
+        // Partial rounding: build the shape from rects + sectors so only desired corners are rounded.
+        // Center body (inset by the side reserves).
+        int cx = L + leftR;
+        int cy = T + topR;
+        int cw = W - leftR - rightR;
+        int ch = H - topR - bottomR;
+        if (cw > 0 && ch > 0)
         {
-            Raylib.DrawRectangle((int)(x + leftInset), (int)(y + topInset), (int)innerW, (int)innerH, fill);
+            Raylib.DrawRectangle(cx, cy, cw, ch, fill);
         }
 
-        if (topInset > 0f && innerW > 0f)
+        // Top ledge (the straight part of the top edge, between any rounded corners).
+        // Slight inward overlap helps avoid seams with the sector radii.
+        if (topR > 0 && cw > 0)
         {
-            Raylib.DrawRectangle((int)(x + leftInset), (int)y, (int)innerW, (int)topInset, fill);
+            Raylib.DrawRectangle(cx, T, cw, topR + 1, fill);
         }
 
-        if (bottomInset > 0f && innerW > 0f)
+        // Bottom ledge.
+        if (bottomR > 0 && cw > 0)
         {
-            Raylib.DrawRectangle((int)(x + leftInset), (int)(y + h - bottomInset), (int)innerW, (int)bottomInset, fill);
+            Raylib.DrawRectangle(cx, B - bottomR - 1, cw, bottomR + 1, fill);
         }
 
-        if (leftInset > 0f && innerH > 0f)
+        // Left ledge (middle vertical strip on left, between top/bottom reserves).
+        int ly0 = T + topR - 1;
+        if (ly0 < T) ly0 = T;
+        int ly1 = B - bottomR;
+        int lh = ly1 - ly0;
+        if (leftR > 0 && lh > 0)
         {
-            Raylib.DrawRectangle((int)x, (int)(y + topInset), (int)leftInset, (int)innerH, fill);
+            Raylib.DrawRectangle(L, ly0, leftR, lh + 1, fill);
         }
 
-        if (rightInset > 0f && innerH > 0f)
+        // Right ledge.
+        int ry0 = T + topR - 1;
+        if (ry0 < T) ry0 = T;
+        int ry1 = B - bottomR;
+        int rh = ry1 - ry0;
+        if (rightR > 0 && rh > 0)
         {
-            Raylib.DrawRectangle((int)(x + w - rightInset), (int)(y + topInset), (int)rightInset, (int)innerH, fill);
+            Raylib.DrawRectangle(R - rightR, ry0, rightR, rh + 1, fill);
         }
 
-        if (topInset == 0f && leftInset > 0f)
+        // Corner sectors for the rounded corners only. These add the curved fill exactly where needed
+        // and do not color the "ears" beyond the arc (those stay as background gap).
+        int segs = shape.Segments;
+        if (shape.RoundTopLeft)
         {
-            Raylib.DrawRectangle((int)x, (int)y, (int)leftInset, (int)h, fill);
+            Raylib.DrawCircleSector(new Vector2(L + r, T + r), r, 180f, 270f, segs, fill);
         }
-
-        if (topInset == 0f && rightInset > 0f)
+        if (shape.RoundTopRight)
         {
-            Raylib.DrawRectangle((int)(x + w - rightInset), (int)y, (int)rightInset, (int)h, fill);
+            Raylib.DrawCircleSector(new Vector2(R - r, T + r), r, 270f, 360f, segs, fill);
         }
-
-        if (leftInset == 0f && topInset > 0f)
+        if (shape.RoundBottomLeft)
         {
-            Raylib.DrawRectangle((int)x, (int)y, (int)w, (int)topInset, fill);
+            Raylib.DrawCircleSector(new Vector2(L + r, B - r), r, 90f, 180f, segs, fill);
         }
-
-        if (leftInset == 0f && bottomInset > 0f)
+        if (shape.RoundBottomRight)
         {
-            Raylib.DrawRectangle((int)x, (int)(y + h - bottomInset), (int)w, (int)bottomInset, fill);
-        }
-
-        if (roundTopLeft)
-        {
-            Raylib.DrawCircleSector(new Vector2(x + radius, y + radius), radius, 180f, 270f, segments, fill);
-        }
-
-        if (roundTopRight)
-        {
-            Raylib.DrawCircleSector(new Vector2(x + w - radius, y + radius), radius, 270f, 360f, segments, fill);
-        }
-
-        if (roundBottomLeft)
-        {
-            Raylib.DrawCircleSector(new Vector2(x + radius, y + h - radius), radius, 90f, 180f, segments, fill);
-        }
-
-        if (roundBottomRight)
-        {
-            Raylib.DrawCircleSector(new Vector2(x + w - radius, y + h - radius), radius, 0f, 90f, segments, fill);
+            Raylib.DrawCircleSector(new Vector2(R - r, B - r), r, 0f, 90f, segs, fill);
         }
     }
 
-    private void DrawInsetBorder(
-        float x, float y, float w, float h, float radius,
-        bool borderNorth, bool borderSouth, bool borderWest, bool borderEast,
-        bool roundTopLeft, bool roundTopRight, bool roundBottomLeft, bool roundBottomRight)
+    private static void DrawTerritoryBorder(TerritoryCellShape shape)
     {
         Color border = ClassicPalette.Border;
-        bool useArcs = radius >= 1f;
+        var rect = shape.Fill;
+        float x = rect.X;
+        float y = rect.Y;
+        float w = rect.Width;
+        float h = rect.Height;
+        int ri = shape.Radius;
+        float r = ri; // for convenience in float math below
+        bool useArcs = ri >= 2 && shape.AnyRoundedCorner;
 
-        if (borderNorth)
+        if (shape.FullyEnclosed && useArcs &&
+            shape.RoundTopLeft && shape.RoundTopRight && shape.RoundBottomLeft && shape.RoundBottomRight)
         {
-            float x0 = x + (useArcs && roundTopLeft ? radius : 0f);
-            float x1 = x + w - (useArcs && roundTopRight ? radius : 0f);
+            Raylib.DrawRectangleRoundedLines(rect, shape.Roundness, shape.Segments, BorderThickness, border);
+            return;
+        }
+
+        if (shape.BorderNorth)
+        {
+            float x0 = x + (useArcs && shape.RoundTopLeft ? r : 0f);
+            float x1 = x + w - (useArcs && shape.RoundTopRight ? r : 0f);
             if (x1 > x0) DrawBorderLine(x0, y, x1, y, border);
         }
 
-        if (borderSouth)
+        if (shape.BorderSouth)
         {
-            float x0 = x + (useArcs && roundBottomLeft ? radius : 0f);
-            float x1 = x + w - (useArcs && roundBottomRight ? radius : 0f);
+            float x0 = x + (useArcs && shape.RoundBottomLeft ? r : 0f);
+            float x1 = x + w - (useArcs && shape.RoundBottomRight ? r : 0f);
             if (x1 > x0) DrawBorderLine(x0, y + h, x1, y + h, border);
         }
 
-        if (borderWest)
+        if (shape.BorderWest)
         {
-            float y0 = y + (useArcs && roundTopLeft ? radius : 0f);
-            float y1 = y + h - (useArcs && roundBottomLeft ? radius : 0f);
+            float y0 = y + (useArcs && shape.RoundTopLeft ? r : 0f);
+            float y1 = y + h - (useArcs && shape.RoundBottomLeft ? r : 0f);
             if (y1 > y0) DrawBorderLine(x, y0, x, y1, border);
         }
 
-        if (borderEast)
+        if (shape.BorderEast)
         {
-            float y0 = y + (useArcs && roundTopRight ? radius : 0f);
-            float y1 = y + h - (useArcs && roundBottomRight ? radius : 0f);
+            float y0 = y + (useArcs && shape.RoundTopRight ? r : 0f);
+            float y1 = y + h - (useArcs && shape.RoundBottomRight ? r : 0f);
             if (y1 > y0) DrawBorderLine(x + w, y0, x + w, y1, border);
         }
 
         if (!useArcs) return;
 
-        if (roundTopLeft) DrawBorderArc(x + radius, y + radius, radius, 180f, 270f, border);
-        if (roundTopRight) DrawBorderArc(x + w - radius, y + radius, radius, 270f, 360f, border);
-        if (roundBottomLeft) DrawBorderArc(x + radius, y + h - radius, radius, 90f, 180f, border);
-        if (roundBottomRight) DrawBorderArc(x + w - radius, y + h - radius, radius, 0f, 90f, border);
+        if (shape.RoundTopLeft) DrawBorderArc(x + r, y + r, r, 180f, 270f, shape.Segments, border);
+        if (shape.RoundTopRight) DrawBorderArc(x + w - r, y + r, r, 270f, 360f, shape.Segments, border);
+        if (shape.RoundBottomLeft) DrawBorderArc(x + r, y + h - r, r, 90f, 180f, shape.Segments, border);
+        if (shape.RoundBottomRight) DrawBorderArc(x + w - r, y + h - r, r, 0f, 90f, shape.Segments, border);
     }
 
     private static void DrawBorderLine(float x0, float y0, float x1, float y1, Color color) =>
         Raylib.DrawLineEx(new Vector2(x0, y0), new Vector2(x1, y1), BorderThickness, color);
 
-    private static void DrawBorderArc(float cx, float cy, float radius, float startDegrees, float endDegrees, Color color)
+    private static void DrawBorderArc(
+        float cx, float cy, float radius, float startDegrees, float endDegrees, int segments, Color color)
     {
-        int segments = Math.Max(24, (int)Math.Ceiling(radius * 10f));
         float halfThick = BorderThickness * 0.5f;
-        Raylib.DrawRing(
+        Raylib.DrawRingLines(
             new Vector2(cx, cy),
             Math.Max(0.1f, radius - halfThick),
             radius + halfThick,
