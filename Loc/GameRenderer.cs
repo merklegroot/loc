@@ -20,7 +20,7 @@ public sealed class GameRenderer
     {
         if (inMenu || session == null)
         {
-            DrawMainMenu();
+            DrawMainMenuBackground();
             return;
         }
 
@@ -415,6 +415,7 @@ public sealed class GameRenderer
             if (territory.HasCity) DrawCityIcon(px + 6, py - 4);
             if (territory.HasWeapon) DrawWeaponIcon(px - 8, py - 2);
             if (territory.HasHorse) DrawHorseIcon(px, py + 5);
+            if (territory.BoatCount > 0) DrawBoatIcon(px - 6, py + 6);
             if (territory.IsStockpile) DrawStockpileIcon(px - 4, py + 6);
         }
     }
@@ -444,6 +445,15 @@ public sealed class GameRenderer
     private static void DrawStockpileIcon(int cx, int cy)
     {
         Raylib.DrawRectangle(cx, cy, 4, 4, ClassicPalette.Border);
+    }
+
+    private static void DrawBoatIcon(int cx, int cy)
+    {
+        Raylib.DrawTriangle(
+            new Vector2(cx, cy + 3),
+            new Vector2(cx + 5, cy + 3),
+            new Vector2(cx + 2, cy - 2),
+            ClassicPalette.PlayerCyan);
     }
 
     private void DrawBottomPanel(GameSession session)
@@ -515,6 +525,10 @@ public sealed class GameRenderer
         UiText.DrawText($"YEAR {session.Year}  |  {session.CurrentPlayer.Name.ToUpperInvariant()}", infoX, py + 16, 16, session.CurrentPlayer.Color);
         DrawStockpileList(session, infoX, py + 44);
         UiText.DrawText($"CITIES {session.CountCities(session.CurrentPlayer.Id)}/{session.Config.CitiesToWin}", infoX, py + 120, 14, ClassicPalette.Text);
+        if (session.CountCities(session.CurrentPlayer.Id) >= session.Config.CitiesToWin)
+        {
+            UiText.DrawText("HOLD CITIES THROUGH NEXT YEAR TO WIN", infoX, py + 138, 11, ClassicPalette.PlayerYellow);
+        }
     }
 
     private static void DrawStockpileList(GameSession session, int x, int y)
@@ -592,7 +606,7 @@ public sealed class GameRenderer
         }
     }
 
-    private void DrawMainMenu()
+    public void DrawMainMenuBackground()
     {
         int w = Raylib.GetScreenWidth();
         int h = Raylib.GetScreenHeight();

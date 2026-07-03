@@ -8,6 +8,7 @@ public sealed class PlayerState
     public required string Name { get; init; }
     public required Color Color { get; init; }
     public required bool IsHuman { get; init; }
+    public AiPersonality Personality { get; init; } = AiPersonality.Defensive;
 
     public ResourceStockpile Stockpile { get; } = new();
     public int? StockpileTerritoryId { get; set; }

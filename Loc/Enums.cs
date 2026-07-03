@@ -1,5 +1,12 @@
 namespace Loc;
 
+public enum AiPersonality
+{
+    Aggressive,
+    Defensive,
+    Passive
+}
+
 public enum GameLevel
 {
     Beginner,

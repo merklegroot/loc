@@ -9,8 +9,10 @@ public sealed record GameConfig
     public ResourceAbundance Abundance { get; init; } = ResourceAbundance.Medium;
     public int CitiesToWin { get; init; } = 3;
     public int AiDifficulty { get; init; } = 2;
+    public AiPersonality AiPersonality { get; init; } = AiPersonality.Defensive;
     public int TerritoryCount { get; init; } = 16;
     public int Seed { get; init; } = 42;
+    public double WaterRatio { get; init; } = 0.22;
 
     public bool HasBoats => Level is GameLevel.Advanced or GameLevel.Expert;
     public bool ExpertShipment => Level == GameLevel.Expert;

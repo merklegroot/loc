@@ -14,6 +14,7 @@ public sealed class Game
     private GameConfig _menuConfig = new();
     private GameSession? _session;
     private bool _inMenu = true;
+    private bool _inSetup;
     private bool _viewingResources;
     private bool _shouldQuit;
     private float _aiTimer;
@@ -55,7 +56,10 @@ public sealed class Game
     {
         if (_inMenu)
         {
-            UpdateMenu();
+            if (_inSetup)
+                UpdateSetup();
+            else
+                UpdateMenu();
             return;
         }
 
@@ -85,6 +89,48 @@ public sealed class Game
                 ComputerPlayer.TakeTurn(_session);
                 _aiTimer = 0.35f;
             }
+        }
+    }
+
+    private void UpdateSetup()
+    {
+        var rows = SetupScreen.Rows(_menuConfig, ScreenWidth, ScreenHeight);
+        var (back, start) = SetupScreen.ActionButtons(ScreenWidth, ScreenHeight);
+
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_UP))
+            _menuSelection = (_menuSelection - 1 + rows.Count) % rows.Count;
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_DOWN))
+            _menuSelection = (_menuSelection + 1) % rows.Count;
+        if (Raylib.IsKeyPressed(KeyboardKey.KEY_ENTER) || Raylib.IsKeyPressed(KeyboardKey.KEY_RIGHT))
+            _menuConfig = SetupScreen.CycleRow(_menuConfig, rows[_menuSelection].Label);
+
+        if (!Raylib.IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_LEFT)) return;
+
+        var mouse = Raylib.GetMousePosition();
+        if (Raylib.CheckCollisionPointRec(mouse, back))
+        {
+            _inSetup = false;
+            _menuSelection = 0;
+            return;
+        }
+
+        if (Raylib.CheckCollisionPointRec(mouse, start))
+        {
+            _session = new GameSession(_menuConfig);
+            _session.StartNewGame();
+            _inMenu = false;
+            _inSetup = false;
+            _autoTerritorySelection = false;
+            _aiTimer = 0.5f;
+            return;
+        }
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (!Raylib.CheckCollisionPointRec(mouse, rows[i].Rect)) continue;
+            _menuSelection = i;
+            _menuConfig = SetupScreen.CycleRow(_menuConfig, rows[i].Label);
+            return;
         }
     }
 
@@ -128,11 +174,8 @@ public sealed class Game
         switch (label)
         {
             case "NEW GAME":
-                _session = new GameSession(_menuConfig);
-                _session.StartNewGame();
-                _inMenu = false;
-                _autoTerritorySelection = false;
-                _aiTimer = 0.5f;
+                _inSetup = true;
+                _menuSelection = 0;
                 break;
             case "RESOURCES":
                 _viewingResources = true;
@@ -240,6 +283,12 @@ public sealed class Game
             case "CITY":
                 _session.SetPendingDevelopment("city");
                 break;
+            case "BOAT":
+                _session.SetPendingDevelopment("boat");
+                break;
+            case "GIFT GOLD":
+                _session.GiftTradeResource();
+                break;
             case "END TURN":
             case "END PHASE":
                 _session.EndPlayerTurn();
@@ -266,7 +315,13 @@ public sealed class Game
 
         if (_inMenu)
         {
-            if (_viewingResources)
+            if (_inSetup)
+            {
+                _renderer.DrawMainMenuBackground();
+                SetupScreen.Draw(_menuConfig, ScreenWidth, ScreenHeight);
+                HighlightSetupRow();
+            }
+            else if (_viewingResources)
             {
                 _renderer.DrawResourcesScreen();
                 _renderer.DrawButtons(GetMenuButtons(), _menuSelection);
@@ -291,6 +346,13 @@ public sealed class Game
         }
 
         Raylib.EndDrawing();
+    }
+
+    private void HighlightSetupRow()
+    {
+        var rows = SetupScreen.Rows(_menuConfig, ScreenWidth, ScreenHeight);
+        if (_menuSelection < 0 || _menuSelection >= rows.Count) return;
+        Raylib.DrawRectangleLinesEx(rows[_menuSelection].Rect, 2, ClassicPalette.Highlight);
     }
 
     private void DrawGameOver()
@@ -361,10 +423,18 @@ public sealed class Game
                 if (_session.CanDevelopCity())
                     buttons.Add((new Rectangle(x, y, w, h), "CITY"));
                 y += h + gap;
+                if (_session.CanDevelopBoat())
+                    buttons.Add((new Rectangle(x, y, w, h), "BOAT"));
+                y += h + gap;
                 buttons.Add((new Rectangle(x, y, w, h), "END TURN"));
                 break;
             case GamePhase.Shipment:
+                buttons.Add((new Rectangle(x, y, w, h), "END TURN"));
+                break;
             case GamePhase.Trading:
+                if (_session.CanGiftTrade())
+                    buttons.Add((new Rectangle(x, y, w, h), "GIFT GOLD"));
+                y += h + gap;
                 buttons.Add((new Rectangle(x, y, w, h), "END TURN"));
                 break;
         }

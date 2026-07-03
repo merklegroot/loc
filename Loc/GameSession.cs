@@ -19,6 +19,7 @@ public sealed class GameSession
     private int _attackBonus;
     private bool _waitingStockpilePlacement;
     private string? _winnerName;
+    private readonly HashSet<int> _cityGoalHolders = [];
 
     public GameConfig Config { get; }
     public WorldMap Map { get; }
@@ -36,6 +37,7 @@ public sealed class GameSession
     public bool SkipShipment { get; private set; }
     public int AttacksRemaining => _attacksRemaining;
     public int? PendingAttackTarget => _pendingAttackTarget;
+    public int AttackBonus => _attackBonus;
     public int ConquestMenuIndex { get; set; } = 1;
 
     public GameSession(GameConfig config)
@@ -67,7 +69,8 @@ public sealed class GameSession
                 Id = i,
                 Name = isHuman ? $"Player {i + 1}" : $"Computer {i + 1}",
                 Color = PlayerColors[i % PlayerColors.Length],
-                IsHuman = isHuman
+                IsHuman = isHuman,
+                Personality = isHuman ? AiPersonality.Defensive : config.AiPersonality
             });
         }
         return players;
@@ -147,6 +150,7 @@ public sealed class GameSession
                 StatusMessage = $"{CurrentPlayer.Name}: development phase.";
                 break;
             case GamePhase.Production:
+                MaybeTriggerRandomEvent();
                 SkipProduction = Config.Chance != ChanceLevel.Low && _rng.Next(4) == 0;
                 if (SkipProduction)
                 {
@@ -304,6 +308,7 @@ public sealed class GameSession
         {
             "weapon" => "Click a territory to build a weapon.",
             "city" => "Click a territory to build a city.",
+            "boat" => "Click a coastal territory to build a boat.",
             _ => $"{CurrentPlayer.Name}: development phase."
         };
     }
@@ -312,6 +317,7 @@ public sealed class GameSession
     {
         if (PendingDevelopment == "weapon") BuyWeapon(territoryId);
         else if (PendingDevelopment == "city") BuyCity(territoryId);
+        else if (PendingDevelopment == "boat") BuyBoat(territoryId);
         PendingDevelopment = null;
     }
 
@@ -320,6 +326,22 @@ public sealed class GameSession
 
     public bool CanDevelopCity() =>
         DevelopmentCosts.CityCost(Config.Level) is { } cost && CurrentPlayer.Stockpile.CanSpend(cost);
+
+    public bool CanDevelopBoat()
+    {
+        if (!Config.HasBoats) return false;
+        var cost = BoatBuildCost();
+        return cost != null && CurrentPlayer.Stockpile.CanSpend(cost);
+    }
+
+    private IReadOnlyDictionary<ResourceType, int>? BoatBuildCost()
+    {
+        if (CurrentPlayer.Stockpile.Get(ResourceType.Timber) >= 3)
+            return DevelopmentCosts.BoatCostTimber();
+        if (CurrentPlayer.Stockpile.Get(ResourceType.Gold) >= 3)
+            return DevelopmentCosts.BoatCostGold();
+        return null;
+    }
 
     public void BuyWeapon(int territoryId)
     {
@@ -341,7 +363,34 @@ public sealed class GameSession
         if (!CurrentPlayer.Stockpile.Spend(cost)) return;
         territory.HasCity = true;
         StatusMessage = $"{CurrentPlayer.Name} built a city in {territory.Name}.";
-        CheckVictory();
+    }
+
+    public void BuyBoat(int territoryId)
+    {
+        if (Phase != GamePhase.Development || !Config.HasBoats) return;
+        var territory = ValidateDevelopmentTarget(territoryId);
+        if (territory == null || !IsCoastal(territory)) return;
+        var cost = BoatBuildCost();
+        if (cost == null || !CurrentPlayer.Stockpile.Spend(cost)) return;
+        territory.BoatCount++;
+        StatusMessage = $"{CurrentPlayer.Name} built a boat in {territory.Name}.";
+    }
+
+    private bool IsCoastal(Territory territory)
+    {
+        int[] dx = [0, 1, 0, -1];
+        int[] dy = [-1, 0, 1, 0];
+        foreach (var (x, y) in territory.Cells)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+                if (nx < 0 || ny < 0 || nx >= Map.Width || ny >= Map.Height) return true;
+                if (Map.IsWater[nx, ny]) return true;
+            }
+        }
+        return false;
     }
 
     private Territory? ValidateDevelopmentTarget(int territoryId)
@@ -380,10 +429,13 @@ public sealed class GameSession
         _pendingAttackTarget = territoryId;
         SelectedTerritoryId = territoryId;
         ConquestMenuIndex = 2;
-        int atk = ForceCalculator.OffensiveForce(Map, target, CurrentPlayer.Id) + _attackBonus;
+        int atk = OffensiveForce(target) + _attackBonus;
         int def = ForceCalculator.DefensiveForce(Map, target, target.OwnerId);
         StatusMessage = atk >= def ? "Attack will succeed." : atk < def ? "Attack may fail." : "Forces are equal.";
     }
+
+    private int OffensiveForce(Territory target) =>
+        ForceCalculator.OffensiveForce(Map, target, CurrentPlayer.Id, Config.HasBoats);
 
     public void ReplanAttack()
     {
@@ -420,7 +472,7 @@ public sealed class GameSession
                 else EndPlayerTurn();
                 break;
             case "BRING FORCES":
-                StatusMessage = "Bring forces — coming soon.";
+                BringForces();
                 break;
             case "END TURN":
                 ReplanAttack();
@@ -437,7 +489,7 @@ public sealed class GameSession
         if (Phase != GamePhase.Conquest || _pendingAttackTarget is not int targetId) return;
         var target = Map.GetTerritory(targetId)!;
         int defenderId = target.OwnerId;
-        int attackForce = ForceCalculator.OffensiveForce(Map, target, CurrentPlayer.Id) + _attackBonus;
+        int attackForce = OffensiveForce(target) + _attackBonus;
         int defendForce = ForceCalculator.DefensiveForce(Map, target, defenderId);
 
         bool won = Config.Chance == ChanceLevel.High
@@ -453,7 +505,6 @@ public sealed class GameSession
         {
             ConquerTerritory(target, CurrentPlayer.Id, defenderId);
             StatusMessage = $"{CurrentPlayer.Name} conquered {target.Name}!";
-            CheckVictory();
             if (_attacksRemaining > 0)
             {
                 StatusMessage += " Plan another attack or end phase.";
@@ -494,6 +545,65 @@ public sealed class GameSession
         }
 
         target.OwnerId = newOwnerId;
+    }
+
+    public void BringForces()
+    {
+        if (Phase != GamePhase.Conquest || _pendingAttackTarget == null) return;
+        var cost = new Dictionary<ResourceType, int> { [ResourceType.Gold] = 1 };
+        if (!CurrentPlayer.Stockpile.CanSpend(cost)) return;
+        CurrentPlayer.Stockpile.Spend(cost);
+        _attackBonus++;
+        if (_pendingAttackTarget is int targetId && PreviewCombat(targetId) is (int atk, int def))
+        {
+            StatusMessage = $"Brought forces (+{_attackBonus}). ATT {atk} vs DEF {def}.";
+        }
+    }
+
+    public bool CanBringForces() =>
+        CurrentPlayer.Stockpile.Get(ResourceType.Gold) > 0;
+
+    public void GiftTradeResource()
+    {
+        if (Phase != GamePhase.Trading || !Config.TradingEnabled) return;
+        var cost = new Dictionary<ResourceType, int> { [ResourceType.Gold] = 1 };
+        if (!CurrentPlayer.Stockpile.CanSpend(cost)) return;
+
+        int recipientIndex = (CurrentPlayerIndex + 1) % Players.Count;
+        var recipient = Players[recipientIndex];
+        CurrentPlayer.Stockpile.Spend(cost);
+        recipient.Stockpile.Add(ResourceType.Gold, 1);
+        StatusMessage = $"{CurrentPlayer.Name} gifted gold to {recipient.Name}.";
+    }
+
+    public bool CanGiftTrade() =>
+        Config.TradingEnabled && CurrentPlayer.Stockpile.Get(ResourceType.Gold) > 0;
+
+    private void MaybeTriggerRandomEvent()
+    {
+        if (Config.Chance == ChanceLevel.Low || _rng.Next(8) != 0) return;
+
+        switch (_rng.Next(3))
+        {
+            case 0:
+                var victim = Players[_rng.Next(Players.Count)];
+                foreach (var (type, _) in victim.Stockpile.Enumerate().ToList())
+                {
+                    if (victim.Stockpile.Get(type) > 0)
+                        victim.Stockpile.Spend(new Dictionary<ResourceType, int> { [type] = 1 });
+                }
+                StatusMessage = $"Plague! {victim.Name} lost resources.";
+                break;
+            case 1:
+                SkipProduction = true;
+                StatusMessage = "Strike! Production disrupted this year.";
+                break;
+            default:
+                var lucky = Players[_rng.Next(Players.Count)];
+                lucky.Stockpile.Add(ResourceType.Gold, 2);
+                StatusMessage = $"Bounty! {lucky.Name} received gold.";
+                break;
+        }
     }
 
     public void UseAttackToMoveStockpile(int territoryId)
@@ -563,29 +673,38 @@ public sealed class GameSession
 
     private bool CheckVictory()
     {
-        var cityCounts = Players.Select(p => (Player: p, Cities: Map.OwnedBy(p.Id).Count(t => t.HasCity))).ToList();
         int needed = Config.CitiesToWin;
-        var contenders = cityCounts.Where(c => c.Cities >= needed).ToList();
+        var currentLeaders = Players
+            .Where(p => CountCities(p.Id) >= needed)
+            .Select(p => p.Id)
+            .ToHashSet();
 
-        if (contenders.Count == 1)
+        var winners = currentLeaders.Where(_cityGoalHolders.Contains).ToList();
+        if (winners.Count == 1)
         {
-            _winnerName = contenders[0].Player.Name;
+            _winnerName = Players[winners[0]].Name;
             Phase = GamePhase.GameOver;
             StatusMessage = $"{_winnerName} wins!";
             return true;
         }
 
-        if (contenders.Count > 1)
+        if (winners.Count > 1)
         {
-            int max = contenders.Max(c => c.Cities);
-            var leaders = contenders.Where(c => c.Cities == max).ToList();
-            if (leaders.Count == 1)
+            int maxCities = winners.Max(id => CountCities(id));
+            var top = winners.Where(id => CountCities(id) == maxCities).ToList();
+            if (top.Count == 1)
             {
-                _winnerName = leaders[0].Player.Name;
+                _winnerName = Players[top[0]].Name;
                 Phase = GamePhase.GameOver;
                 StatusMessage = $"{_winnerName} wins in overtime!";
                 return true;
             }
+        }
+
+        _cityGoalHolders.Clear();
+        foreach (int id in currentLeaders)
+        {
+            _cityGoalHolders.Add(id);
         }
 
         return false;
@@ -597,7 +716,7 @@ public sealed class GameSession
     {
         var target = Map.GetTerritory(territoryId);
         if (target == null || target.OwnerId < 0) return null;
-        int atk = ForceCalculator.OffensiveForce(Map, target, CurrentPlayer.Id) + _attackBonus;
+        int atk = OffensiveForce(target) + _attackBonus;
         int def = ForceCalculator.DefensiveForce(Map, target, target.OwnerId);
         return (atk, def);
     }

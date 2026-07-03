@@ -21,7 +21,7 @@ public static class MapGenerator
             {
                 bool edge = x < 2 || y < 2 || x >= width - 2 || y >= height - 2;
                 bool nearCoast = x < 4 || y < 4 || x >= width - 4 || y >= height - 4;
-                bool coastalNoise = nearCoast && !edge && rng.NextDouble() < 0.22;
+                bool coastalNoise = nearCoast && !edge && rng.NextDouble() < config.WaterRatio;
                 isWater[x, y] = edge || coastalNoise;
             }
         }
