@@ -21,11 +21,14 @@ public static class MapGenerator
             for (int y = 0; y < height; y++)
             {
                 bool edge = x < 2 || y < 2 || x >= width - 2 || y >= height - 2;
-                bool noisy = rng.NextDouble() < 0.14;
-                isWater[x, y] = edge || noisy;
+                bool nearCoast = x < 4 || y < 4 || x >= width - 4 || y >= height - 4;
+                bool coastalNoise = nearCoast && !edge && rng.NextDouble() < 0.22;
+                isWater[x, y] = edge || coastalNoise;
                 grid[x, y] = -1;
             }
         }
+
+        RemoveEnclosedWater(isWater, width, height);
 
         var landCells = new List<(int X, int Y)>();
         for (int x = 0; x < width; x++)
@@ -52,6 +55,51 @@ public static class MapGenerator
             TerritoryGrid = labels,
             Territories = territories
         };
+    }
+
+    private static void RemoveEnclosedWater(bool[,] isWater, int width, int height)
+    {
+        var reachable = new bool[width, height];
+        var queue = new Queue<(int X, int Y)>();
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (!isWater[x, y]) continue;
+                bool onMapEdge = x == 0 || y == 0 || x == width - 1 || y == height - 1;
+                if (!onMapEdge) continue;
+                reachable[x, y] = true;
+                queue.Enqueue((x, y));
+            }
+        }
+
+        int[] dx = [0, 1, 0, -1];
+        int[] dy = [-1, 0, 1, 0];
+        while (queue.Count > 0)
+        {
+            var (x, y) = queue.Dequeue();
+            for (int i = 0; i < 4; i++)
+            {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+                if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                if (!isWater[nx, ny] || reachable[nx, ny]) continue;
+                reachable[nx, ny] = true;
+                queue.Enqueue((nx, ny));
+            }
+        }
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (isWater[x, y] && !reachable[x, y])
+                {
+                    isWater[x, y] = false;
+                }
+            }
+        }
     }
 
     private static List<(int X, int Y)> PickSeeds(List<(int X, int Y)> land, int count, Random rng)
