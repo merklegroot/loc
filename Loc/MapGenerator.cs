@@ -14,7 +14,6 @@ public static class MapGenerator
         int width = 52;
         int height = 38;
         var isWater = new bool[width, height];
-        var grid = new int[width, height];
 
         for (int x = 0; x < width; x++)
         {
@@ -24,7 +23,6 @@ public static class MapGenerator
                 bool nearCoast = x < 4 || y < 4 || x >= width - 4 || y >= height - 4;
                 bool coastalNoise = nearCoast && !edge && rng.NextDouble() < 0.22;
                 isWater[x, y] = edge || coastalNoise;
-                grid[x, y] = -1;
             }
         }
 
