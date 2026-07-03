@@ -110,7 +110,7 @@ public sealed class GameSession
     {
         var unowned = Map.Unowned().ToList();
         int remainder = unowned.Count;
-        if (remainder > 0 && remainder >= Players.Count)
+        if (remainder > 0)
         {
             CurrentPlayerIndex = (CurrentPlayerIndex + 1) % Players.Count;
             StatusMessage = $"{CurrentPlayer.Name}: pick a territory.";

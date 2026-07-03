@@ -18,6 +18,7 @@ public sealed class Game
     private bool _shouldQuit;
     private float _aiTimer;
     private int _menuSelection;
+    private bool _autoTerritorySelection;
 
     public void Run()
     {
@@ -63,7 +64,18 @@ public sealed class Game
         UpdateHover();
         UpdateInput();
 
-        if (!_session.IsHumanTurn())
+        if (_session.Phase == GamePhase.TerritorySelection && _autoTerritorySelection)
+        {
+            _aiTimer -= dt;
+            if (_aiTimer <= 0)
+            {
+                TerritoryPicker.Pick(_session);
+                _aiTimer = 0.35f;
+                if (_session.Phase != GamePhase.TerritorySelection)
+                    _autoTerritorySelection = false;
+            }
+        }
+        else if (!_session.IsHumanTurn())
         {
             _aiTimer -= dt;
             if (_aiTimer <= 0)
@@ -117,6 +129,7 @@ public sealed class Game
                 _session = new GameSession(_menuConfig);
                 _session.StartNewGame();
                 _inMenu = false;
+                _autoTerritorySelection = false;
                 _aiTimer = 0.5f;
                 break;
             case "RESOURCES":
@@ -149,6 +162,9 @@ public sealed class Game
     private void UpdateInput()
     {
         if (_session == null || !_session.IsHumanTurn()) return;
+
+        if (_session.Phase == GamePhase.TerritorySelection && _autoTerritorySelection)
+            return;
 
         if (_session.Phase == GamePhase.Conquest)
         {
@@ -226,8 +242,16 @@ public sealed class Game
             case "END PHASE":
                 _session.EndPlayerTurn();
                 break;
+            case "AUTO TERRITORIES":
+                if (_session.Phase == GamePhase.TerritorySelection)
+                {
+                    _autoTerritorySelection = true;
+                    _aiTimer = 0;
+                }
+                break;
             case "MAIN MENU":
                 _inMenu = true;
+                _autoTerritorySelection = false;
                 _session = null;
                 break;
         }
@@ -325,6 +349,9 @@ public sealed class Game
 
         switch (_session.Phase)
         {
+            case GamePhase.TerritorySelection:
+                buttons.Add((new Rectangle(x, y, w, h), "AUTO TERRITORIES"));
+                break;
             case GamePhase.Development:
                 if (_session.CanDevelopWeapon())
                     buttons.Add((new Rectangle(x, y, w, h), "WEAPON"));
