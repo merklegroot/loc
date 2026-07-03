@@ -93,61 +93,161 @@ public sealed class GameRenderer
         int tid = map.TerritoryGrid[x, y];
         var territory = map.GetTerritory(tid)!;
         Color fill = TerritoryFill(session, territory, tid, x, y);
-        Raylib.DrawRectangle(fillX, fillY, fillW, fillH, fill);
 
-        DrawInsetBorder(fillX, fillY, fillW, fillH, borderNorth, borderSouth, borderWest, borderEast);
-    }
-
-    private const float BorderThickness = 1.5f;
-
-    private void DrawInsetBorder(
-        int x, int y, int w, int h, bool borderNorth, bool borderSouth, bool borderWest, bool borderEast)
-    {
-        float fx = x;
-        float fy = y;
-        float fw = w;
-        float fh = h;
-        float radius = Math.Clamp(Math.Min(fw, fh) / 3f, 2f, Math.Min(fw, fh) / 2f - 1f);
-        if (radius < 1f) radius = 1f;
-
-        Color border = ClassicPalette.Border;
         bool roundTopLeft = borderNorth && borderWest;
         bool roundTopRight = borderNorth && borderEast;
         bool roundBottomLeft = borderSouth && borderWest;
         bool roundBottomRight = borderSouth && borderEast;
+        float radius = ComputeCornerRadius(fillW, fillH);
+
+        DrawRoundedFill(fillX, fillY, fillW, fillH, radius, roundTopLeft, roundTopRight, roundBottomLeft, roundBottomRight, fill);
+        DrawInsetBorder(fillX, fillY, fillW, fillH, radius, borderNorth, borderSouth, borderWest, borderEast,
+            roundTopLeft, roundTopRight, roundBottomLeft, roundBottomRight);
+    }
+
+    private const float BorderThickness = 1.5f;
+
+    private static float ComputeCornerRadius(float w, float h)
+    {
+        float maxRadius = Math.Min(w, h) * 0.5f - BorderThickness - 0.5f;
+        if (maxRadius < 1f) return 0f;
+        return Math.Min(Math.Min(w, h) / 3f, maxRadius);
+    }
+
+    private static void DrawRoundedFill(
+        float x, float y, float w, float h, float radius,
+        bool roundTopLeft, bool roundTopRight, bool roundBottomLeft, bool roundBottomRight, Color fill)
+    {
+        if (radius < 1f || (!roundTopLeft && !roundTopRight && !roundBottomLeft && !roundBottomRight))
+        {
+            Raylib.DrawRectangle((int)x, (int)y, (int)w, (int)h, fill);
+            return;
+        }
+
+        int segments = Math.Max(12, (int)Math.Ceiling(radius * 6));
+
+        if (roundTopLeft && roundTopRight && roundBottomLeft && roundBottomRight)
+        {
+            float roundness = Math.Clamp(radius / (Math.Min(w, h) * 0.5f), 0.05f, 1f);
+            Raylib.DrawRectangleRounded(new Rectangle(x, y, w, h), roundness, segments, fill);
+            return;
+        }
+
+        float leftInset = roundTopLeft || roundBottomLeft ? radius : 0f;
+        float rightInset = roundTopRight || roundBottomRight ? radius : 0f;
+        float topInset = roundTopLeft || roundTopRight ? radius : 0f;
+        float bottomInset = roundBottomLeft || roundBottomRight ? radius : 0f;
+
+        float innerW = w - leftInset - rightInset;
+        float innerH = h - topInset - bottomInset;
+        if (innerW > 0f && innerH > 0f)
+        {
+            Raylib.DrawRectangle((int)(x + leftInset), (int)(y + topInset), (int)innerW, (int)innerH, fill);
+        }
+
+        if (topInset > 0f && innerW > 0f)
+        {
+            Raylib.DrawRectangle((int)(x + leftInset), (int)y, (int)innerW, (int)topInset, fill);
+        }
+
+        if (bottomInset > 0f && innerW > 0f)
+        {
+            Raylib.DrawRectangle((int)(x + leftInset), (int)(y + h - bottomInset), (int)innerW, (int)bottomInset, fill);
+        }
+
+        if (leftInset > 0f && innerH > 0f)
+        {
+            Raylib.DrawRectangle((int)x, (int)(y + topInset), (int)leftInset, (int)innerH, fill);
+        }
+
+        if (rightInset > 0f && innerH > 0f)
+        {
+            Raylib.DrawRectangle((int)(x + w - rightInset), (int)(y + topInset), (int)rightInset, (int)innerH, fill);
+        }
+
+        if (topInset == 0f && leftInset > 0f)
+        {
+            Raylib.DrawRectangle((int)x, (int)y, (int)leftInset, (int)h, fill);
+        }
+
+        if (topInset == 0f && rightInset > 0f)
+        {
+            Raylib.DrawRectangle((int)(x + w - rightInset), (int)y, (int)rightInset, (int)h, fill);
+        }
+
+        if (leftInset == 0f && topInset > 0f)
+        {
+            Raylib.DrawRectangle((int)x, (int)y, (int)w, (int)topInset, fill);
+        }
+
+        if (leftInset == 0f && bottomInset > 0f)
+        {
+            Raylib.DrawRectangle((int)x, (int)(y + h - bottomInset), (int)w, (int)bottomInset, fill);
+        }
+
+        if (roundTopLeft)
+        {
+            Raylib.DrawCircleSector(new Vector2(x + radius, y + radius), radius, 180f, 270f, segments, fill);
+        }
+
+        if (roundTopRight)
+        {
+            Raylib.DrawCircleSector(new Vector2(x + w - radius, y + radius), radius, 270f, 360f, segments, fill);
+        }
+
+        if (roundBottomLeft)
+        {
+            Raylib.DrawCircleSector(new Vector2(x + radius, y + h - radius), radius, 90f, 180f, segments, fill);
+        }
+
+        if (roundBottomRight)
+        {
+            Raylib.DrawCircleSector(new Vector2(x + w - radius, y + h - radius), radius, 0f, 90f, segments, fill);
+        }
+    }
+
+    private void DrawInsetBorder(
+        float x, float y, float w, float h, float radius,
+        bool borderNorth, bool borderSouth, bool borderWest, bool borderEast,
+        bool roundTopLeft, bool roundTopRight, bool roundBottomLeft, bool roundBottomRight)
+    {
+        Color border = ClassicPalette.Border;
+        bool useArcs = radius >= 1f;
 
         if (borderNorth)
         {
-            float x0 = fx + (roundTopLeft ? radius : 0f);
-            float x1 = fx + fw - (roundTopRight ? radius : 0f);
-            if (x1 > x0) DrawBorderLine(x0, fy, x1, fy, border);
+            float x0 = x + (useArcs && roundTopLeft ? radius : 0f);
+            float x1 = x + w - (useArcs && roundTopRight ? radius : 0f);
+            if (x1 > x0) DrawBorderLine(x0, y, x1, y, border);
         }
 
         if (borderSouth)
         {
-            float x0 = fx + (roundBottomLeft ? radius : 0f);
-            float x1 = fx + fw - (roundBottomRight ? radius : 0f);
-            if (x1 > x0) DrawBorderLine(x0, fy + fh, x1, fy + fh, border);
+            float x0 = x + (useArcs && roundBottomLeft ? radius : 0f);
+            float x1 = x + w - (useArcs && roundBottomRight ? radius : 0f);
+            if (x1 > x0) DrawBorderLine(x0, y + h, x1, y + h, border);
         }
 
         if (borderWest)
         {
-            float y0 = fy + (roundTopLeft ? radius : 0f);
-            float y1 = fy + fh - (roundBottomLeft ? radius : 0f);
-            if (y1 > y0) DrawBorderLine(fx, y0, fx, y1, border);
+            float y0 = y + (useArcs && roundTopLeft ? radius : 0f);
+            float y1 = y + h - (useArcs && roundBottomLeft ? radius : 0f);
+            if (y1 > y0) DrawBorderLine(x, y0, x, y1, border);
         }
 
         if (borderEast)
         {
-            float y0 = fy + (roundTopRight ? radius : 0f);
-            float y1 = fy + fh - (roundBottomRight ? radius : 0f);
-            if (y1 > y0) DrawBorderLine(fx + fw, y0, fx + fw, y1, border);
+            float y0 = y + (useArcs && roundTopRight ? radius : 0f);
+            float y1 = y + h - (useArcs && roundBottomRight ? radius : 0f);
+            if (y1 > y0) DrawBorderLine(x + w, y0, x + w, y1, border);
         }
 
-        if (roundTopLeft) DrawBorderArc(fx + radius, fy + radius, radius, 180f, 270f, border);
-        if (roundTopRight) DrawBorderArc(fx + fw - radius, fy + radius, radius, 270f, 360f, border);
-        if (roundBottomLeft) DrawBorderArc(fx + radius, fy + fh - radius, radius, 90f, 180f, border);
-        if (roundBottomRight) DrawBorderArc(fx + fw - radius, fy + fh - radius, radius, 0f, 90f, border);
+        if (!useArcs) return;
+
+        if (roundTopLeft) DrawBorderArc(x + radius, y + radius, radius, 180f, 270f, border);
+        if (roundTopRight) DrawBorderArc(x + w - radius, y + radius, radius, 270f, 360f, border);
+        if (roundBottomLeft) DrawBorderArc(x + radius, y + h - radius, radius, 90f, 180f, border);
+        if (roundBottomRight) DrawBorderArc(x + w - radius, y + h - radius, radius, 0f, 90f, border);
     }
 
     private static void DrawBorderLine(float x0, float y0, float x1, float y1, Color color) =>
