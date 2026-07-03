@@ -20,7 +20,11 @@ public static class ResourceIcons
         if (!File.Exists(path)) return;
 
         Image img = Raylib.LoadImage(path);
-        Raylib.ImageColorReplace(ref img, new Color(0, 0, 0, 255), new Color(0, 0, 0, 0));
+        if (img.Format != PixelFormat.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8)
+        {
+            Raylib.ImageFormat(ref img, PixelFormat.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+            Raylib.ImageColorReplace(ref img, new Color(0, 0, 0, 255), new Color(0, 0, 0, 0));
+        }
         _sheet = Raylib.LoadTextureFromImage(img);
         Raylib.UnloadImage(img);
         Raylib.SetTextureFilter(_sheet, TextureFilter.TEXTURE_FILTER_POINT);
