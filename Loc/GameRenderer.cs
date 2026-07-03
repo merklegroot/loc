@@ -60,7 +60,7 @@ public sealed class GameRenderer
     private void DrawMap(GameSession session)
     {
         var map = session.Map;
-        int gapHalf = Math.Max(1, CellSize / 6);
+        int gapHalf = Math.Max(2, CellSize / 4);
 
         for (int x = 0; x < map.Width; x++)
         {
@@ -98,11 +98,17 @@ public sealed class GameRenderer
         DrawInsetBorder(fillX, fillY, fillW, fillH, borderNorth, borderSouth, borderWest, borderEast);
     }
 
+    private const float BorderThickness = 1.5f;
+
     private void DrawInsetBorder(
         int x, int y, int w, int h, bool borderNorth, bool borderSouth, bool borderWest, bool borderEast)
     {
-        int radius = Math.Clamp(Math.Min(w, h) / 3, 2, Math.Min(w, h) / 2 - 1);
-        if (radius < 1) radius = 1;
+        float fx = x;
+        float fy = y;
+        float fw = w;
+        float fh = h;
+        float radius = Math.Clamp(Math.Min(fw, fh) / 3f, 2f, Math.Min(fw, fh) / 2f - 1f);
+        if (radius < 1f) radius = 1f;
 
         Color border = ClassicPalette.Border;
         bool roundTopLeft = borderNorth && borderWest;
@@ -112,36 +118,53 @@ public sealed class GameRenderer
 
         if (borderNorth)
         {
-            int x0 = x + (roundTopLeft ? radius : 0);
-            int x1 = x + w - (roundTopRight ? radius : 0);
-            if (x1 > x0) Raylib.DrawLine(x0, y, x1, y, border);
+            float x0 = fx + (roundTopLeft ? radius : 0f);
+            float x1 = fx + fw - (roundTopRight ? radius : 0f);
+            if (x1 > x0) DrawBorderLine(x0, fy, x1, fy, border);
         }
 
         if (borderSouth)
         {
-            int x0 = x + (roundBottomLeft ? radius : 0);
-            int x1 = x + w - (roundBottomRight ? radius : 0);
-            if (x1 > x0) Raylib.DrawLine(x0, y + h, x1, y + h, border);
+            float x0 = fx + (roundBottomLeft ? radius : 0f);
+            float x1 = fx + fw - (roundBottomRight ? radius : 0f);
+            if (x1 > x0) DrawBorderLine(x0, fy + fh, x1, fy + fh, border);
         }
 
         if (borderWest)
         {
-            int y0 = y + (roundTopLeft ? radius : 0);
-            int y1 = y + h - (roundBottomLeft ? radius : 0);
-            if (y1 > y0) Raylib.DrawLine(x, y0, x, y1, border);
+            float y0 = fy + (roundTopLeft ? radius : 0f);
+            float y1 = fy + fh - (roundBottomLeft ? radius : 0f);
+            if (y1 > y0) DrawBorderLine(fx, y0, fx, y1, border);
         }
 
         if (borderEast)
         {
-            int y0 = y + (roundTopRight ? radius : 0);
-            int y1 = y + h - (roundBottomRight ? radius : 0);
-            if (y1 > y0) Raylib.DrawLine(x + w, y0, x + w, y1, border);
+            float y0 = fy + (roundTopRight ? radius : 0f);
+            float y1 = fy + fh - (roundBottomRight ? radius : 0f);
+            if (y1 > y0) DrawBorderLine(fx + fw, y0, fx + fw, y1, border);
         }
 
-        if (roundTopLeft) DrawBorderArc(x + radius, y + radius, radius, 180, 270, border);
-        if (roundTopRight) DrawBorderArc(x + w - radius, y + radius, radius, 270, 360, border);
-        if (roundBottomLeft) DrawBorderArc(x + radius, y + h - radius, radius, 90, 180, border);
-        if (roundBottomRight) DrawBorderArc(x + w - radius, y + h - radius, radius, 0, 90, border);
+        if (roundTopLeft) DrawBorderArc(fx + radius, fy + radius, radius, 180f, 270f, border);
+        if (roundTopRight) DrawBorderArc(fx + fw - radius, fy + radius, radius, 270f, 360f, border);
+        if (roundBottomLeft) DrawBorderArc(fx + radius, fy + fh - radius, radius, 90f, 180f, border);
+        if (roundBottomRight) DrawBorderArc(fx + fw - radius, fy + fh - radius, radius, 0f, 90f, border);
+    }
+
+    private static void DrawBorderLine(float x0, float y0, float x1, float y1, Color color) =>
+        Raylib.DrawLineEx(new Vector2(x0, y0), new Vector2(x1, y1), BorderThickness, color);
+
+    private static void DrawBorderArc(float cx, float cy, float radius, float startDegrees, float endDegrees, Color color)
+    {
+        int segments = Math.Max(24, (int)Math.Ceiling(radius * 10f));
+        float halfThick = BorderThickness * 0.5f;
+        Raylib.DrawRing(
+            new Vector2(cx, cy),
+            Math.Max(0.1f, radius - halfThick),
+            radius + halfThick,
+            startDegrees,
+            endDegrees,
+            segments,
+            color);
     }
 
     private Color TerritoryFill(GameSession session, Territory territory, int tid, int x, int y)
@@ -174,25 +197,6 @@ public sealed class GameRenderer
         (byte)Math.Min(255, c.G + amount),
         (byte)Math.Min(255, c.B + amount),
         (byte)255);
-
-    private static void DrawBorderArc(int cx, int cy, int radius, int startDegrees, int endDegrees, Color color)
-    {
-        const int segments = 8;
-        double start = startDegrees * Math.PI / 180.0;
-        double end = endDegrees * Math.PI / 180.0;
-        double step = (end - start) / segments;
-
-        for (int i = 0; i < segments; i++)
-        {
-            double a0 = start + step * i;
-            double a1 = start + step * (i + 1);
-            int x0 = cx + (int)Math.Round(Math.Cos(a0) * radius);
-            int y0 = cy + (int)Math.Round(Math.Sin(a0) * radius);
-            int x1 = cx + (int)Math.Round(Math.Cos(a1) * radius);
-            int y1 = cy + (int)Math.Round(Math.Sin(a1) * radius);
-            Raylib.DrawLine(x0, y0, x1, y1, color);
-        }
-    }
 
     private static bool SameRegion(WorldMap map, int x1, int y1, int x2, int y2) =>
         RegionAt(map, x1, y1) == RegionAt(map, x2, y2);
